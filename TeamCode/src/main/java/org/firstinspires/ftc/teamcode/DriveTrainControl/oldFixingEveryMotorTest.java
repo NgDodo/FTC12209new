@@ -20,7 +20,7 @@ import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-import MiniBot.ButtonHelper;
+import org.firstinspires.ftc.teamcode.ButtonHelper;
 
 @TeleOp(name = "OLD DriveTrain + Stable Tracking + s5 Position", group = "DriveTrainControl")
 public class oldFixingEveryMotorTest extends LinearOpMode {

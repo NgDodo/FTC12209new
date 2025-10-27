@@ -1,6 +1,6 @@
 package org.firstinspires.ftc.teamcode.DriveTrainControl;
 
-import com.acmerobotics.roadrunner.ftc.SparkFunOTOSCorrected;
+//import com.acmerobotics.roadrunner.ftc.SparkFunOTOSCorrected;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
@@ -10,7 +10,7 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 public class SparkfunTest extends LinearOpMode {
 
     private DcMotorEx frontLeft, frontRight, backLeft, backRight;
-    private SparkFunOTOSCorrected odometry;
+   // private SparkFunOTOSCorrected odometry;
 
     // Conversion constant (sensor gives mm → convert to inches)
     private static final double MM_TO_INCH = 0.0393701;
@@ -33,7 +33,7 @@ public class SparkfunTest extends LinearOpMode {
 
         // === SparkFun OTOS Sensor Setup ===
         try {
-            odometry = hardwareMap.get(SparkFunOTOSCorrected.class, "odometry");
+        //    odometry = hardwareMap.get(SparkFunOTOSCorrected.class, "odometry");
         } catch (Exception e) {
             telemetry.addData("ERROR", "SparkFunOTOSCorrected not found in config");
             telemetry.update();
@@ -68,7 +68,7 @@ public class SparkfunTest extends LinearOpMode {
             backRight.setPower(br / max);
 
             // === Read Sensor ===
-            if (odometry != null) {
+          //  if (odometry != null) {
                 //double dxMM = odometry.getDeltaX(); // mm since last loop
                 //double dyMM = odometry.getDeltaY();
                 //headingDeg = Math.toDegrees(odometry.getHeading());
@@ -82,9 +82,9 @@ public class SparkfunTest extends LinearOpMode {
                 telemetry.addData("Total X (in)", "%.3f", xInch);
                 telemetry.addData("Total Y (in)", "%.3f", yInch);
                 telemetry.addData("Heading (deg)", "%.2f", headingDeg);
-            } else {
+          //  } else {
                 telemetry.addLine("ERROR: No SparkFun OTOS detected");
-            }
+           // }
 
             telemetry.update();
             sleep(20);
