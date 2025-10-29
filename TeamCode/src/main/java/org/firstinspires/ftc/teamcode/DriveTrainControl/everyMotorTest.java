@@ -15,13 +15,13 @@ import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
 
 import java.util.List;
 
-@TeleOp(name = "DriveTrain + Stable Tracking + s5 Position", group = "DriveTrainControl")
+@TeleOp(name = "DriveTrain + Stable Tracking", group = "DriveTrainControl")
 public class everyMotorTest extends OpMode {
 
     DcMotorEx frontLeftMotor, backLeftMotor, frontRightMotor, backRightMotor;
     DcMotor m1, m2;
-    DcMotorEx m3;
-    CRServo s1, s3, s5;
+    DcMotorEx m3, m0;
+    CRServo s1, s3;
     Servo s2;
 
     // Vision
@@ -98,6 +98,7 @@ public class everyMotorTest extends OpMode {
         m1 = hardwareMap.get(DcMotor.class, "m1");
         m2 = hardwareMap.get(DcMotor.class, "m2");
         m3 = hardwareMap.get(DcMotorEx.class, "m3");
+        m0 = hardwareMap.get(DcMotorEx.class, "m0");
 
         m1.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         m2.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
@@ -110,7 +111,6 @@ public class everyMotorTest extends OpMode {
         s1 = hardwareMap.get(CRServo.class, "s1");
         s2 = hardwareMap.get(Servo.class, "s2");
         s3 = hardwareMap.get(CRServo.class, "s3");
-        s5 = hardwareMap.get(CRServo.class, "s5");
 
         s3.setDirection(DcMotorSimple.Direction.REVERSE);
         s2.setPosition(1.0);
@@ -144,6 +144,28 @@ public class everyMotorTest extends OpMode {
         frontRightMotor.setPower(clipLowPower(fr / max));
         backRightMotor.setPower(clipLowPower(br / max));
 
+        // Motor m0 controls
+        if (gamepad1.dpad_right) {
+            m0.setPower(.5);
+        } else {
+            m0.setPower(0);
+        }
+        if (gamepad1.dpad_left) {
+            m0.setPower(-.5);
+        } else {
+            m0.setPower(0);
+        }
+        // Motor m0 controls
+        if (gamepad1.dpad_up) {
+            s1.setPower(.5);
+        } else {
+            s1.setPower(0);
+        }
+        if (gamepad1.dpad_down) {
+            s1.setPower(-.5);
+        } else {
+            s1.setPower(0);
+        }
         // Servo s2 and s3 controls
         if (gamepad1.a) {
             s2.setPosition(0);
@@ -170,53 +192,6 @@ public class everyMotorTest extends OpMode {
 
         double targetTicksPerSec = (targetRPM / 60.0) * TICKS_PER_REV;
         m3.setVelocity(targetTicksPerSec);
-
-        // === s5 position control (one-tap with safety timeout) ===
-        double currentPos = m2.getCurrentPosition();
-
-        if (gamepad1.dpad_right && !lastDpadRight) {
-            moveToForward = true;
-            moveToHome = false;
-            s5MoveStartTime = getTimeSeconds();
-        }
-        if (gamepad1.dpad_left && !lastDpadLeft) {
-            moveToHome = true;
-            moveToForward = false;
-            s5MoveStartTime = getTimeSeconds();
-        }
-        lastDpadRight = gamepad1.dpad_right;
-        lastDpadLeft = gamepad1.dpad_left;
-
-        // forward target
-        if (moveToForward) {
-            double error = TARGET_FORWARD_POS - currentPos;
-            double absErr = Math.abs(error);
-            if (absErr > SERVO_TOLERANCE && (getTimeSeconds() - s5MoveStartTime) < S5_MOVE_TIMEOUT) {
-                double speed = clamp(absErr / 1500.0, SERVO_MIN_SPEED, SERVO_MAX_SPEED);
-                // apply direction flip constant so you can change sign easily
-                s5.setPower(S5_DIRECTION * Math.copySign(speed, error));
-            } else {
-                s5.setPower(0.0);
-                moveToForward = false;
-            }
-        }
-        // home target
-        else if (moveToHome) {
-            double error = MIN_POS - currentPos; // positive if need to move negative direction
-            double absErr = Math.abs(error);
-            if (absErr > SERVO_TOLERANCE && (getTimeSeconds() - s5MoveStartTime) < S5_MOVE_TIMEOUT) {
-                double speed = clamp(absErr / 1500.0, SERVO_MIN_SPEED, SERVO_MAX_SPEED);
-                s5.setPower(S5_DIRECTION * Math.copySign(speed, error));
-            } else {
-                s5.setPower(0.0);
-                moveToHome = false;
-            }
-        } else {
-            s5.setPower(0.0);
-        }
-
-        telemetry.addData("s5 Pos", "%.1f", currentPos);
-        telemetry.addData("Target", TARGET_FORWARD_POS);
 
         // === Toggle Camera Tracking ===
         if (gamepad1.y && !lastYPressed) {
