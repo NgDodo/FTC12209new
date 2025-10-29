@@ -15,7 +15,7 @@ import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
 
 import java.util.List;
 
-@TeleOp(name = "DriveTrain + Stable Tracking", group = "DriveTrainControl")
+@TeleOp(name = "DriveTrain + Stable Tracking + m0 Telemetry", group = "DriveTrainControl")
 public class everyMotorTest extends OpMode {
 
     DcMotorEx frontLeftMotor, backLeftMotor, frontRightMotor, backRightMotor;
@@ -36,15 +36,14 @@ public class everyMotorTest extends OpMode {
     private double derivativeFiltered = 0.0;
 
     // PD-ish constants (tuned for faster response but damped)
-    private double kP_base = 0.0012;     // base proportional
-    private double kD = 0.008;         // derivative to damp
-    private final double MAX_POWER = 0.55;   // allow fast servo bursts
-    private final double MIN_POWER = 0.06;   // minimum power to overcome friction
-    private final double DEADZONE = 12.0;    // pixel deadband
+    private double kP_base = 0.0012;
+    private double kD = 0.008;
+    private final double MAX_POWER = 0.55;
+    private final double MIN_POWER = 0.06;
+    private final double DEADZONE = 12.0;
     private final double DERIV_FILTER = 0.25;
-    private final double TICK_INTERVAL = 0.04; // 25 Hz tick rate
 
-    // Pulse state (non-blocking)
+    // Pulse state
     private boolean pulsing = false;
     private double pulseEndTime = 0.0;
     private double pulsePower = 0.0;
@@ -56,29 +55,15 @@ public class everyMotorTest extends OpMode {
     private boolean lastRightBumper = false;
     private boolean lastLeftBumper = false;
 
-    // Encoder + positional control (s5)
+    // Encoder telemetry
     private static final double TICKS_PER_REV = 28.0;
-    private int lastEncoderPos = 0;
-    private long lastTimeNs = 0;
-    private double encoderVelocity = 0;
+    private int lastEncoderPosM2 = 0;
+    private long lastTimeNsM2 = 0;
+    private double encoderVelocityM2 = 0;
 
-    private static final double TARGET_FORWARD_POS = 2733.33;
-    private static final double MIN_POS = 0;
-    private static final double SERVO_MAX_SPEED = 0.45;
-    private static final double SERVO_MIN_SPEED = 0.10;
-    private static final double SERVO_TOLERANCE = 20;
-
-    private boolean moveToForward = false;
-    private boolean moveToHome = false;
-    private boolean lastDpadRight = false;
-    private boolean lastDpadLeft = false;
-
-    // safety: timeouts for s5 movement
-    private double s5MoveStartTime = 0.0;
-    private final double S5_MOVE_TIMEOUT = 2.0; // seconds max to try reaching
-
-    // If CRServo rotates opposite of encoder sign, flip this to -1
-    private final int S5_DIRECTION = -1; // set to -1 or +1 to match hardware. adjust if needed.
+    private int lastEncoderPosM0 = 0;
+    private long lastTimeNsM0 = 0;
+    private double encoderVelocityM0 = 0;
 
     @Override
     public void init() {
@@ -103,7 +88,10 @@ public class everyMotorTest extends OpMode {
         m1.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         m2.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         m3.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        m0.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+
         m3.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        m0.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
         m2.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         m2.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
@@ -119,8 +107,12 @@ public class everyMotorTest extends OpMode {
         visionPortal = VisionPortal.easyCreateWithDefaults(
                 hardwareMap.get(WebcamName.class, "Webcam 1"), aprilTag);
 
-        lastEncoderPos = m2.getCurrentPosition();
-        lastTimeNs = System.nanoTime();
+        lastEncoderPosM2 = m2.getCurrentPosition();
+        lastTimeNsM2 = System.nanoTime();
+
+        lastEncoderPosM0 = m0.getCurrentPosition();
+        lastTimeNsM0 = System.nanoTime();
+
         lastTime = getTimeSeconds();
     }
 
@@ -144,29 +136,17 @@ public class everyMotorTest extends OpMode {
         frontRightMotor.setPower(clipLowPower(fr / max));
         backRightMotor.setPower(clipLowPower(br / max));
 
-        // Motor m0 controls
-        if (gamepad1.dpad_right) {
-            m0.setPower(.5);
-        } else {
-            m0.setPower(0);
-        }
-        if (gamepad1.dpad_left) {
-            m0.setPower(-.5);
-        } else {
-            m0.setPower(0);
-        }
-        // Motor m0 controls
-        if (gamepad1.dpad_up) {
-            s1.setPower(.5);
-        } else {
-            s1.setPower(0);
-        }
-        if (gamepad1.dpad_down) {
-            s1.setPower(-.5);
-        } else {
-            s1.setPower(0);
-        }
-        // Servo s2 and s3 controls
+        // === m0 manual control ===
+        if (gamepad1.dpad_right) m0.setPower(0.5);
+        else if (gamepad1.dpad_left) m0.setPower(-0.5);
+        else m0.setPower(0.0);
+
+        // === s1 manual control ===
+        if (gamepad1.dpad_up) s1.setPower(0.5);
+        else if (gamepad1.dpad_down) s1.setPower(-0.5);
+        else s1.setPower(0.0);
+
+        // === s2 + s3 shooter control ===
         if (gamepad1.a) {
             s2.setPosition(0);
             s3.setPower(1.0);
@@ -180,7 +160,7 @@ public class everyMotorTest extends OpMode {
         m1.setPower(-triggerPower);
         m2.setPower(triggerPower);
 
-        // === m3 preset RPM ===
+        // === m3 RPM control ===
         if (gamepad1.right_bumper && !lastRightBumper) {
             presetIndex = (presetIndex + 1) % rpmPresets.length;
             targetRPM = rpmPresets[presetIndex];
@@ -193,94 +173,31 @@ public class everyMotorTest extends OpMode {
         double targetTicksPerSec = (targetRPM / 60.0) * TICKS_PER_REV;
         m3.setVelocity(targetTicksPerSec);
 
-        // === Toggle Camera Tracking ===
-        if (gamepad1.y && !lastYPressed) {
-            cameraTrackingMode = !cameraTrackingMode;
-        }
-        lastYPressed = gamepad1.y;
-
-        // === Non-blocking pulse controller for CRServo camera (s1) ===
-        //  - pulses the servo for a short time. pulses are non-blocking because we
-        //    persist pulse state across loop() calls.
-        //  - this prevents runaway rotations and gives camera time to update.
-
-        // if currently pulsing, keep servo on until pulseEndTime, otherwise turn off
-        double nowTime = getTimeSeconds();
-        if (pulsing) {
-            if (nowTime < pulseEndTime) {
-                s1.setPower(pulsePower);
-            } else {
-                s1.setPower(0.0);
-                pulsing = false;
-            }
-        }
-
-        if (cameraTrackingMode && !pulsing) {
-            List<AprilTagDetection> detections = aprilTag.getDetections();
-            if (!detections.isEmpty()) {
-                AprilTagDetection det = detections.get(0);
-                double tagX = det.center.x;
-                double frameCenter = 640.0 / 2.0; // adjust if your webcam resolution differs
-                double errorX = tagX - frameCenter;
-
-                double dt = nowTime - lastTime;
-                if (dt <= 0) dt = 1e-3;
-
-                // derivative
-                double derivative = (errorX - lastError) / dt;
-                derivativeFiltered = DERIV_FILTER * derivative + (1 - DERIV_FILTER) * derivativeFiltered;
-
-                // adaptive proportional (stronger for larger errors)
-                double kP = kP_base * (0.8 + 0.4 * Math.min(Math.abs(errorX) / 300.0, 1.0));
-
-                double raw = (kP * errorX) + (kD * derivativeFiltered);
-                // compute pulse amplitude (clamped)
-                double amp = clamp(Math.abs(raw), MIN_POWER, MAX_POWER);
-                // direction: we want servo to move toward reducing error
-                double direction = Math.signum(-errorX); // negative because signed relationship
-
-                // only act if outside deadzone
-                if (Math.abs(errorX) > DEADZONE) {
-                    // determine pulse duration: larger errors => longer pulse
-                    double pulseDur = clamp(0.02 + Math.abs(errorX) / 2500.0, 0.02, 0.10); // 20–100 ms
-                    pulsing = true;
-                    pulseEndTime = nowTime + pulseDur;
-                    pulsePower = direction * amp;
-                    s1.setPower(pulsePower); // start pulse immediately; loop() will turn off later
-                } else {
-                    // centered — ensure servo off
-                    s1.setPower(0.0);
-                }
-
-                lastError = errorX;
-                lastTime = nowTime;
-
-                telemetry.addData("Camera Tracking", "ON");
-                telemetry.addData("Tag X", "%.1f", tagX);
-                telemetry.addData("ErrX", "%.1f", errorX);
-                telemetry.addData("Pulse amp", "%.3f", pulsePower);
-                telemetry.addData("PulseDur (s)", "%.3f", (pulseEndTime - nowTime));
-            } else {
-                // no tag: ensure servo off
-                s1.setPower(0.0);
-                telemetry.addData("Camera Tracking", "ON (no tag)");
-            }
-        } else if (!cameraTrackingMode) {
-            s1.setPower(0.0);
-            telemetry.addData("Camera Tracking", "OFF");
-        }
-
-        // === Encoder Velocity Telemetry ===
-        int encoderPos = m2.getCurrentPosition();
+        // === Encoder Telemetry for m2 ===
+        int encoderPosM2 = m2.getCurrentPosition();
         long nowNs = System.nanoTime();
-        double dtEnc = (nowNs - lastTimeNs) / 1e9;
-        if (dtEnc > 0.05) {
-            encoderVelocity = (encoderPos - lastEncoderPos) / dtEnc;
-            lastTimeNs = nowNs;
-            lastEncoderPos = encoderPos;
+        double dtEncM2 = (nowNs - lastTimeNsM2) / 1e9;
+        if (dtEncM2 > 0.05) {
+            encoderVelocityM2 = (encoderPosM2 - lastEncoderPosM2) / dtEncM2;
+            lastTimeNsM2 = nowNs;
+            lastEncoderPosM2 = encoderPosM2;
         }
+
+        // === Encoder Telemetry for m0 ===
+        int encoderPosM0 = m0.getCurrentPosition();
+        double dtEncM0 = (nowNs - lastTimeNsM0) / 1e9;
+        if (dtEncM0 > 0.05) {
+            encoderVelocityM0 = (encoderPosM0 - lastEncoderPosM0) / dtEncM0;
+            lastTimeNsM0 = nowNs;
+            lastEncoderPosM0 = encoderPosM0;
+        }
+
+        telemetry.addLine("=== Motor Telemetry ===");
+        telemetry.addData("m0 Pos (ticks)", encoderPosM0);
+        telemetry.addData("m0 Vel (ticks/sec)", "%.1f", encoderVelocityM0);
+        telemetry.addData("m2 Pos (ticks)", encoderPosM2);
+        telemetry.addData("m2 Vel (ticks/sec)", "%.1f", encoderVelocityM2);
         telemetry.addData("Target RPM (m3)", targetRPM);
-        telemetry.addData("Encoder Velocity", "%.1f ticks/s", encoderVelocity);
         telemetry.update();
     }
 
