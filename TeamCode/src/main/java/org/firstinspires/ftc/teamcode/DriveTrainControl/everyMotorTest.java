@@ -15,7 +15,7 @@ import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
 
 import java.util.List;
 
-@TeleOp(name = "DriveTrain + Stable Tracking + m0 Telemetry", group = "DriveTrainControl")
+@TeleOp(name = "DriveTrain + m0 Position Move (700 ticks)", group = "DriveTrainControl")
 public class everyMotorTest extends OpMode {
 
     DcMotorEx frontLeftMotor, backLeftMotor, frontRightMotor, backRightMotor;
@@ -28,42 +28,28 @@ public class everyMotorTest extends OpMode {
     private VisionPortal visionPortal;
     private AprilTagProcessor aprilTag;
 
-    // Camera PD control (for pulse computation)
-    private boolean cameraTrackingMode = false;
-    private boolean lastYPressed = false;
-    private double lastError = 0.0;
-    private double lastTime = 0.0;
-    private double derivativeFiltered = 0.0;
+    // m0 movement control
+    private static final int TICKS_PER_MOVE = 700;
+    private static final int POSITION_TOLERANCE = 10;
+    private static final double M0_MAX_POWER = 0.5;
+    private static final double M0_KP = 0.002;
 
-    // PD-ish constants (tuned for faster response but damped)
-    private double kP_base = 0.0012;
-    private double kD = 0.008;
-    private final double MAX_POWER = 0.55;
-    private final double MIN_POWER = 0.06;
-    private final double DEADZONE = 12.0;
-    private final double DERIV_FILTER = 0.25;
+    private boolean lastDpadLeft = false;
+    private boolean lastDpadRight = false;
+    private boolean movingToTarget = false;
+    private int targetPositionM0 = 0;
 
-    // Pulse state
-    private boolean pulsing = false;
-    private double pulseEndTime = 0.0;
-    private double pulsePower = 0.0;
+    // Telemetry tracking
+    private int lastEncoderPosM0 = 0;
+    private long lastTimeNsM0 = 0;
+    private double encoderVelocityM0 = 0;
 
-    // RPM presets for m3
-    private final int[] rpmPresets = {3000, 3500, 3800};
-    private int presetIndex = -1;
-    private double targetRPM = 0;
-    private boolean lastRightBumper = false;
-    private boolean lastLeftBumper = false;
-
-    // Encoder telemetry
-    private static final double TICKS_PER_REV = 28.0;
     private int lastEncoderPosM2 = 0;
     private long lastTimeNsM2 = 0;
     private double encoderVelocityM2 = 0;
 
-    private int lastEncoderPosM0 = 0;
-    private long lastTimeNsM0 = 0;
-    private double encoderVelocityM0 = 0;
+    private boolean cameraTrackingMode = false;
+    private boolean lastYPressed = false;
 
     @Override
     public void init() {
@@ -91,6 +77,8 @@ public class everyMotorTest extends OpMode {
         m0.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
         m3.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+
+        m0.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         m0.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
         m2.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
@@ -107,13 +95,10 @@ public class everyMotorTest extends OpMode {
         visionPortal = VisionPortal.easyCreateWithDefaults(
                 hardwareMap.get(WebcamName.class, "Webcam 1"), aprilTag);
 
-        lastEncoderPosM2 = m2.getCurrentPosition();
-        lastTimeNsM2 = System.nanoTime();
-
         lastEncoderPosM0 = m0.getCurrentPosition();
+        lastEncoderPosM2 = m2.getCurrentPosition();
         lastTimeNsM0 = System.nanoTime();
-
-        lastTime = getTimeSeconds();
+        lastTimeNsM2 = System.nanoTime();
     }
 
     @Override
@@ -136,55 +121,40 @@ public class everyMotorTest extends OpMode {
         frontRightMotor.setPower(clipLowPower(fr / max));
         backRightMotor.setPower(clipLowPower(br / max));
 
-        // === m0 manual control ===
-        if (gamepad1.dpad_right) m0.setPower(0.5);
-        else if (gamepad1.dpad_left) m0.setPower(-0.5);
-        else m0.setPower(0.0);
+        // === Replace Dpad Controls: Move m0 exactly 700 ticks ===
+        boolean dpadLeft = gamepad1.dpad_left;
+        boolean dpadRight = gamepad1.dpad_right;
 
-        // === s1 manual control ===
-        if (gamepad1.dpad_up) s1.setPower(0.5);
-        else if (gamepad1.dpad_down) s1.setPower(-0.5);
-        else s1.setPower(0.0);
+        if (dpadRight && !lastDpadRight) {
+            targetPositionM0 = m0.getCurrentPosition() + TICKS_PER_MOVE;
+            movingToTarget = true;
+        }
+        if (dpadLeft && !lastDpadLeft) {
+            targetPositionM0 = m0.getCurrentPosition() - TICKS_PER_MOVE;
+            movingToTarget = true;
+        }
 
-        // === s2 + s3 shooter control ===
-        if (gamepad1.a) {
-            s2.setPosition(0);
-            s3.setPower(1.0);
+        lastDpadLeft = dpadLeft;
+        lastDpadRight = dpadRight;
+
+        if (movingToTarget) {
+            int currentPos = m0.getCurrentPosition();
+            int error = targetPositionM0 - currentPos;
+
+            if (Math.abs(error) > POSITION_TOLERANCE) {
+                double power = clamp(error * M0_KP, -M0_MAX_POWER, M0_MAX_POWER);
+                m0.setPower(power);
+            } else {
+                m0.setPower(0);
+                movingToTarget = false;
+            }
         } else {
-            s2.setPosition(1);
-            s3.setPower(0.0);
-        }
-
-        // === m1 + m2 trigger control ===
-        double triggerPower = gamepad1.right_trigger - gamepad1.left_trigger;
-        m1.setPower(-triggerPower);
-        m2.setPower(triggerPower);
-
-        // === m3 RPM control ===
-        if (gamepad1.right_bumper && !lastRightBumper) {
-            presetIndex = (presetIndex + 1) % rpmPresets.length;
-            targetRPM = rpmPresets[presetIndex];
-        } else if (gamepad1.left_bumper && !lastLeftBumper) {
-            targetRPM = 0;
-        }
-        lastRightBumper = gamepad1.right_bumper;
-        lastLeftBumper = gamepad1.left_bumper;
-
-        double targetTicksPerSec = (targetRPM / 60.0) * TICKS_PER_REV;
-        m3.setVelocity(targetTicksPerSec);
-
-        // === Encoder Telemetry for m2 ===
-        int encoderPosM2 = m2.getCurrentPosition();
-        long nowNs = System.nanoTime();
-        double dtEncM2 = (nowNs - lastTimeNsM2) / 1e9;
-        if (dtEncM2 > 0.05) {
-            encoderVelocityM2 = (encoderPosM2 - lastEncoderPosM2) / dtEncM2;
-            lastTimeNsM2 = nowNs;
-            lastEncoderPosM2 = encoderPosM2;
+            m0.setPower(0);
         }
 
         // === Encoder Telemetry for m0 ===
         int encoderPosM0 = m0.getCurrentPosition();
+        long nowNs = System.nanoTime();
         double dtEncM0 = (nowNs - lastTimeNsM0) / 1e9;
         if (dtEncM0 > 0.05) {
             encoderVelocityM0 = (encoderPosM0 - lastEncoderPosM0) / dtEncM0;
@@ -192,12 +162,24 @@ public class everyMotorTest extends OpMode {
             lastEncoderPosM0 = encoderPosM0;
         }
 
-        telemetry.addLine("=== Motor Telemetry ===");
-        telemetry.addData("m0 Pos (ticks)", encoderPosM0);
-        telemetry.addData("m0 Vel (ticks/sec)", "%.1f", encoderVelocityM0);
-        telemetry.addData("m2 Pos (ticks)", encoderPosM2);
-        telemetry.addData("m2 Vel (ticks/sec)", "%.1f", encoderVelocityM2);
-        telemetry.addData("Target RPM (m3)", targetRPM);
+        // === Encoder Telemetry for m2 ===
+        int encoderPosM2 = m2.getCurrentPosition();
+        double dtEncM2 = (nowNs - lastTimeNsM2) / 1e9;
+        if (dtEncM2 > 0.05) {
+            encoderVelocityM2 = (encoderPosM2 - lastEncoderPosM2) / dtEncM2;
+            lastTimeNsM2 = nowNs;
+            lastEncoderPosM2 = encoderPosM2;
+        }
+
+        // === Telemetry Output ===
+        telemetry.addLine("=== m0 Position Control ===");
+        telemetry.addData("Target", targetPositionM0);
+        telemetry.addData("Current", encoderPosM0);
+        telemetry.addData("Moving?", movingToTarget);
+        telemetry.addData("Velocity (ticks/sec)", "%.1f", encoderVelocityM0);
+        telemetry.addLine("=== m2 Telemetry ===");
+        telemetry.addData("Position", encoderPosM2);
+        telemetry.addData("Velocity (ticks/sec)", "%.1f", encoderVelocityM2);
         telemetry.update();
     }
 
@@ -212,9 +194,5 @@ public class everyMotorTest extends OpMode {
 
     private double clamp(double val, double min, double max) {
         return Math.max(min, Math.min(max, val));
-    }
-
-    private double getTimeSeconds() {
-        return System.nanoTime() / 1e9;
     }
 }
