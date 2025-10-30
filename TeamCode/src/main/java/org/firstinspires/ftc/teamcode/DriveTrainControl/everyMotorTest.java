@@ -29,10 +29,10 @@ public class everyMotorTest extends OpMode {
     private AprilTagProcessor aprilTag;
 
     // m0 movement control
-    private static final int TICKS_PER_MOVE = 700;
+    private static final int TICKS_PER_MOVE = 295;
     private static final int POSITION_TOLERANCE = 10;
-    private static final double M0_MAX_POWER = 0.5;
-    private static final double M0_KP = 0.002;
+    private static final double M0_MAX_POWER = 1;
+    private static final double M0_KP = 0.004;
 
     private boolean lastDpadLeft = false;
     private boolean lastDpadRight = false;
@@ -104,8 +104,8 @@ public class everyMotorTest extends OpMode {
     @Override
     public void loop() {
         // === Drive Train ===
-        double y = applyDeadzone(gamepad1.left_stick_y);
-        double x = applyDeadzone(-gamepad1.left_stick_x);
+        double y = applyDeadzone(-gamepad1.left_stick_y);
+        double x = applyDeadzone(gamepad1.left_stick_x);
         double rx = applyDeadzone(gamepad1.right_stick_x);
 
         double fl = y + x + rx;
@@ -121,7 +121,7 @@ public class everyMotorTest extends OpMode {
         frontRightMotor.setPower(clipLowPower(fr / max));
         backRightMotor.setPower(clipLowPower(br / max));
 
-        // === Replace Dpad Controls: Move m0 exactly 700 ticks ===
+        // === Replace Dpad Controls: Move m0 exactly 1167 ticks ===
         boolean dpadLeft = gamepad1.dpad_left;
         boolean dpadRight = gamepad1.dpad_right;
 
