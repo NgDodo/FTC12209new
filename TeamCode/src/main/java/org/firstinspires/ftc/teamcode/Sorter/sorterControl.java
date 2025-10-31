@@ -7,28 +7,25 @@ import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.hardware.Gamepad;
+import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 
 import org.firstinspires.ftc.teamcode.ButtonHelper;
 
-@TeleOp(name="sorter encoder")
-public class sorterEncoder extends LinearOpMode {
-    CRServo s5;
-    DcMotorEx m2;
+import java.util.Map;
 
-    int sorterPosition;
+@TeleOp(name="sorter control")
+public class sorterControl extends LinearOpMode {
+    DcMotorEx sorterMotor;
+
     enum SORTER_MODE {
         INTAKING,
         SHOOTING
     }
     SORTER_MODE sorterMode = SORTER_MODE.INTAKING;
     int sorterModeOffset = 0;
-    int desiredPosition;
+    int desiredPosition = 0;
 
-    ///  create pid controller --- and kpid values
-    PDController sorterPID;
-    private static final double kP = 0.0005;
-    private static final double kI = 0.000005;
-    private static final double kD = 0.0001;
     final int TOTAL_ROTATION_TICKS = 8192;
     final int ACCEPTABLE_ERROR = 20;
     ButtonHelper gamepad1Helper;
@@ -36,16 +33,11 @@ public class sorterEncoder extends LinearOpMode {
     public void runOpMode() throws InterruptedException {
         gamepad1Helper = new ButtonHelper(gamepad1);
 
-        s5 = hardwareMap.get(CRServo.class, "s5");
-        s5.setDirection(DcMotorSimple.Direction.REVERSE);
-        m2 = hardwareMap.get(DcMotorEx.class, "m0");
-        m2.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        m2.setMode(DcMotorEx.RunMode.RUN_USING_ENCODER);
+        sorterMotor = hardwareMap.get(DcMotorEx.class, "m0");
+        sorterMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        sorterMotor.setMode(DcMotorEx.RunMode.RUN_USING_ENCODER);
+        PIDFCoefficients pidfcoef = sorterMotor.getPIDFCoefficients(DcMotor.RunMode.RUN_TO_POSITION);
 
-        sorterPosition = m2.getCurrentPosition();
-        desiredPosition = 0;
-
-        sorterPID = new PDController(kP, kD);
         waitForStart();
 
         while (opModeIsActive()) {
@@ -53,24 +45,16 @@ public class sorterEncoder extends LinearOpMode {
                 /// offset equal to 0 in intake, 18500/6 in scoring
             // if button to rotate clicked, increase/decreate curernt position goal by 18500/3
 
-            double sorterError = sorterPosition - desiredPosition - sorterModeOffset;
-
-
-            double sorterPower = sorterPID.calculate(sorterError);
-            if (Math.abs(sorterError) > ACCEPTABLE_ERROR) {
-                s5.setPower(sorterPower);
-            }
-
             /// Rotate Sorter
-            if (gamepad1Helper.isButtonJustPressed("dpad_left")) {
+            if (gamepad1.dpadLeftWasPressed()) {
                 desiredPosition += TOTAL_ROTATION_TICKS/3;
             }
-            else if (gamepad1Helper.isButtonJustPressed("dpad_right")) {
+            else if (gamepad1.dpadRightWasPressed()) {
                 desiredPosition -= TOTAL_ROTATION_TICKS/3;
             }
 
             /// Control Sorter Modes
-            if (gamepad1Helper.isButtonJustPressed("y")) {
+            if (gamepad1.yWasPressed()) {
                 if (sorterMode == SORTER_MODE.SHOOTING){
                     sorterMode = SORTER_MODE.INTAKING;
                 }
@@ -86,15 +70,18 @@ public class sorterEncoder extends LinearOpMode {
                 sorterModeOffset = TOTAL_ROTATION_TICKS / 2;
             }
 
-            // Update Sorter Position
-            sorterPosition = m2.getCurrentPosition();
-            gamepad1Helper.update();
-            telemetry.addData("Sorter Power", sorterPower);
-            telemetry.addData("Sorter Error", sorterError);
-            telemetry.addData("Current Position", sorterPosition);
+            if (Math.abs(desiredPosition - sorterMotor.getCurrentPosition()) > ACCEPTABLE_ERROR){
+                sorterMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+                sorterMotor.setTargetPosition(desiredPosition + sorterModeOffset);
+                sorterMotor.setPower(0.03);
+            }
+
+            telemetry.addData("PIDF", pidfcoef);
+            telemetry.addData("Sorter Power", sorterMotor.getPower());
+            telemetry.addData("Current Position", sorterMotor.getCurrentPosition());
             telemetry.addData("Desired Position", desiredPosition);
+            telemetry.addData("Offset", sorterModeOffset);
             telemetry.addData("MODE", sorterMode);
-            telemetry.addData("MODE---OFFSET", sorterModeOffset);
             telemetry.update();
         }
     }
