@@ -33,15 +33,15 @@ public class FullTeleop2 extends OpMode {
     private PDController turretPD;
 
     // === Turret PD constants ===
-    private static final double kP = 0.00055;
-    private static final double kD = 0.00012;
-    private static final double acceptableTurretError = 8.0;
+    private static final double kP = 0.001;
+    private static final double kD = 0.0006;
+    private static final double acceptableTurretError = .25;
     private boolean turretTrackingEnabled = false;
     private boolean lastTurretToggle = false;
 
     // === Sorter constants ===
-    private static final int SORTER_STEP_TICKS = 2375;   // per D-pad tap
-    private static final int SORTER_OFFSET_TICKS = 1000; // per Y toggle
+    private static final int SORTER_STEP_TICKS = 2405;   // per D-pad tap
+    private static final int SORTER_OFFSET_TICKS = 1080; // per Y toggle
     private static final double SORTER_POWER = 1.0;
 
     private boolean sorterOffsetActive = false; // Y toggled offset mode
@@ -53,7 +53,7 @@ public class FullTeleop2 extends OpMode {
     private boolean lastDpadLeft = false;
 
     // === Shooter presets ===
-    private final int[] rpmPresets = {3000, 3500, 3800};
+    private final int[] rpmPresets = {3200, 3500, 3800};
     private int presetIndex = -1;
     private double targetRPM = 0;
     private boolean lastRightBumper = false;
@@ -202,7 +202,7 @@ public class FullTeleop2 extends OpMode {
                 if (Math.abs(errorX) > acceptableTurretError) {
                     turretPD.setSetPoint(0);
                     double turretPow = turretPD.calculate(errorX);
-                    turretPow = Range.clip(turretPow, -0.5, 0.5);
+                    turretPow = Range.clip(turretPow, -.75, .75);
                     s1.setPower(turretPow);
                 } else {
                     s1.setPower(0);
@@ -249,6 +249,7 @@ public class FullTeleop2 extends OpMode {
         telemetry.addData("Sorter Offset Active", sorterOffsetActive);
         telemetry.addData("Turret Tracking", turretTrackingEnabled ? "ON" : "OFF");
         telemetry.addData("Target RPM (m3)", targetRPM);
+        telemetry.addData("Actual RPM (m3)", ((m3.getVelocity()/TICKS_PER_REV)*60));
         telemetry.update();
     }
 
