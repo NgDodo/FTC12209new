@@ -20,7 +20,7 @@ import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
 
 import java.util.List;
 
-@TeleOp(name = "NonBlockTeleop", group = "DriveTrainControl")
+@TeleOp(name = "Full Teleop (Integrated Sorter)", group = "DriveTrainControl")
 public class NonBlockTeleop extends OpMode {
 
     // === Drive Train & Mechanisms ===
@@ -71,9 +71,9 @@ public class NonBlockTeleop extends OpMode {
     private ElapsedTime sorterTimer = new ElapsedTime();
     private ElapsedTime sorterSettleTimer = new ElapsedTime();
     private boolean sorterSettling = false;
-    private static final int COARSE_TOL = 600;
-    private static final int FINE_TOL = 185;
-    private static final int PERFECT_TOL = 150;
+    private static final int COARSE_TOL = 400;
+    private static final int FINE_TOL = 145;
+    private static final int PERFECT_TOL = 100;
     private static final double MAX_POWER = 1;
     private static final double MIN_POWER = 0.08;
     private static final long SORTER_TIMEOUT_MS = 2000;
@@ -90,18 +90,13 @@ public class NonBlockTeleop extends OpMode {
     private static final long EMPTY_DETECT_TIME_MS = 500;
 
     // === Shooter presets ===
-    private final int[] rpmPresets = {2800, 3500, 3800};
+    private final int[] rpmPresets = {3200, 3500, 3800};
     private int presetIndex = -1;
     private double targetRPM = 0;
     private boolean lastRightBumper = false;
     private boolean lastLeftBumper = false;
 
     private static final double TICKS_PER_REV = 28.0;
-
-    // === PID for flywheel ===
-    private PDController flywheelPD;
-    private static final double FLYWHEEL_kP = 0.0003;
-    private static final double FLYWHEEL_kD = 0.00001;
 
     @Override
     public void init() {
@@ -133,10 +128,17 @@ public class NonBlockTeleop extends OpMode {
         for (DcMotor motor : new DcMotor[]{m1, m2, m3, m0}) {
             motor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         }
-        m3.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         m0.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         m2.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         m2.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+
+        // === Flywheel motor setup with custom PIDF ===
+        m3.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        m3.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+
+        // Custom PIDF coefficients for better control (tune these if needed)
+        // Default REV motors have kP=10, kI=3, kD=0, kF=0
+        m3.setVelocityPIDFCoefficients(8.0, 0.5, 0.0, 12.5);
 
         // === Color Sensors ===
         intakeColor  = hardwareMap.get(RevColorSensorV3.class, "intakeColor");
@@ -157,9 +159,6 @@ public class NonBlockTeleop extends OpMode {
                 .setCamera(hardwareMap.get(WebcamName.class, "Webcam 1"))
                 .addProcessor(aprilTag)
                 .build();
-
-        // === Flywheel PD ===
-        flywheelPD = new PDController(FLYWHEEL_kP, FLYWHEEL_kD);
 
         telemetry.addLine("Initialized — Press START to begin");
         telemetry.update();
@@ -236,7 +235,7 @@ public class NonBlockTeleop extends OpMode {
             s3.setPower(0.0);
         }
 
-        // === Shooter RPM with PD control ===
+        // === Shooter RPM with velocity control ===
         if (gamepad1.right_bumper && !lastRightBumper) {
             presetIndex = (presetIndex + 1) % rpmPresets.length;
             targetRPM = rpmPresets[presetIndex];
@@ -246,7 +245,9 @@ public class NonBlockTeleop extends OpMode {
         lastRightBumper = gamepad1.right_bumper;
         lastLeftBumper = gamepad1.left_bumper;
 
-        updateFlywheelPower();
+        // Convert RPM to ticks per second and set velocity
+        double targetTicksPerSec = (targetRPM / 60.0) * TICKS_PER_REV;
+        m3.setVelocity(targetTicksPerSec);
 
         // === Turret Tracking Toggle ===
         if (gamepad1.b && !lastTurretToggle) {
@@ -346,27 +347,6 @@ public class NonBlockTeleop extends OpMode {
         sorterMoving = true;
         sorterSettling = false;
         sorterTimer.reset();
-    }
-
-    /**
-     * Update flywheel power with PD control for smooth RPM control
-     */
-    private void updateFlywheelPower() {
-        if (targetRPM == 0) {
-            m3.setPower(0);
-            return;
-        }
-
-        double currentRPM = (m3.getVelocity() / TICKS_PER_REV) * 60.0;
-
-        flywheelPD.setSetPoint(targetRPM);
-        double correction = flywheelPD.calculate(currentRPM);
-
-        // Base power calculation
-        double basePower = targetRPM / 4000.0; // Normalize to ~0-1 range
-        double finalPower = Range.clip(basePower + correction, 0, 1);
-
-        m3.setPower(finalPower);
     }
 
     private void updateLEDs(String color) {
