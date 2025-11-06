@@ -20,7 +20,7 @@ import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
 
 import java.util.List;
 
-@TeleOp(name = "Full Teleop (Integrated Sorter)", group = "DriveTrainControl")
+@TeleOp(name = "NonBlockTeleop", group = "DriveTrainControl")
 public class NonBlockTeleop extends OpMode {
 
     // === Drive Train & Mechanisms ===
@@ -33,8 +33,9 @@ public class NonBlockTeleop extends OpMode {
     // === Color Sensors & LEDs ===
     private RevColorSensorV3 intakeColor;
     private RevColorSensorV3 shooterColor;
-    private DigitalChannel LED_Green;
-    private DigitalChannel LED_Blue;
+    private DigitalChannel LED_Red;    // RPM indicator
+    private DigitalChannel LED_Green;  // Shooter color
+    private DigitalChannel LED_Blue;   // Shooter color
 
     // === Vision & AprilTag ===
     private VisionPortal visionPortal;
@@ -49,9 +50,9 @@ public class NonBlockTeleop extends OpMode {
     private boolean lastTurretToggle = false;
 
     // === Sorter constants ===
-    private static final int FULL_ROT = 8200;
+    private static final int FULL_ROT = 8192;
     private static final int SLOT = FULL_ROT / 3;
-    private static final int OFFSET = (int) (FULL_ROT / 6.3);
+    private static final int OFFSET = (int) (FULL_ROT / 6);
 
     // ABSOLUTE chamber positions (intake aligned)
     private static final int CHAMBER_0_POS = 0;
@@ -71,9 +72,9 @@ public class NonBlockTeleop extends OpMode {
     private ElapsedTime sorterTimer = new ElapsedTime();
     private ElapsedTime sorterSettleTimer = new ElapsedTime();
     private boolean sorterSettling = false;
-    private static final int COARSE_TOL = 400;
-    private static final int FINE_TOL = 145;
-    private static final int PERFECT_TOL = 100;
+    private static final int COARSE_TOL = 600;
+    private static final int FINE_TOL = 180;
+    private static final int PERFECT_TOL = 160;
     private static final double MAX_POWER = 1;
     private static final double MIN_POWER = 0.08;
     private static final long SORTER_TIMEOUT_MS = 2000;
@@ -97,6 +98,7 @@ public class NonBlockTeleop extends OpMode {
     private boolean lastLeftBumper = false;
 
     private static final double TICKS_PER_REV = 28.0;
+    private static final double RPM_TOLERANCE = 50.0;  // RPM within ±50 is considered "ready"
 
     @Override
     public void init() {
@@ -138,17 +140,20 @@ public class NonBlockTeleop extends OpMode {
 
         // Custom PIDF coefficients for better control (tune these if needed)
         // Default REV motors have kP=10, kI=3, kD=0, kF=0
-        m3.setVelocityPIDFCoefficients(8.0, 0.5, 0.0, 12.5);
+        m3.setVelocityPIDFCoefficients(9, 3, 4, 0);
 
         // === Color Sensors ===
         intakeColor  = hardwareMap.get(RevColorSensorV3.class, "intakeColor");
         shooterColor = hardwareMap.get(RevColorSensorV3.class, "shooterColor");
 
         // === LEDs ===
+        LED_Red   = hardwareMap.get(DigitalChannel.class, "LED1");
         LED_Green = hardwareMap.get(DigitalChannel.class, "LED2");
         LED_Blue  = hardwareMap.get(DigitalChannel.class, "LED3");
+        LED_Red.setMode(DigitalChannel.Mode.OUTPUT);
         LED_Green.setMode(DigitalChannel.Mode.OUTPUT);
         LED_Blue.setMode(DigitalChannel.Mode.OUTPUT);
+        LED_Red.setState(false);
         LED_Green.setState(false);
         LED_Blue.setState(false);
 
@@ -214,7 +219,7 @@ public class NonBlockTeleop extends OpMode {
 
         // ===== Detect shooter color and update LEDs =====
         String shooterColorDetected = detectShooterColor();
-        updateLEDs(shooterColorDetected);
+        updateColorLEDs(shooterColorDetected);
 
         // === Intake motors (always responsive) ===
         if (!shootingMode) {
@@ -249,6 +254,9 @@ public class NonBlockTeleop extends OpMode {
         double targetTicksPerSec = (targetRPM / 60.0) * TICKS_PER_REV;
         m3.setVelocity(targetTicksPerSec);
 
+        // === Update RPM LED ===
+        updateRPMLED();
+
         // === Turret Tracking Toggle ===
         if (gamepad1.b && !lastTurretToggle) {
             turretTrackingEnabled = !turretTrackingEnabled;
@@ -279,6 +287,26 @@ public class NonBlockTeleop extends OpMode {
         }
 
         updateTelemetry(normPos, shooterColorDetected);
+    }
+
+    /**
+     * Update red LED based on RPM - ON when within tolerance of target
+     */
+    private void updateRPMLED() {
+        if (targetRPM == 0) {
+            LED_Red.setState(false);  // OFF when not spinning
+            return;
+        }
+
+        double currentRPM = (m3.getVelocity() / TICKS_PER_REV) * 60.0;
+        double rpmError = Math.abs(targetRPM - currentRPM);
+
+        // Red LED ON when RPM is within tolerance
+        if (rpmError <= RPM_TOLERANCE) {
+            LED_Red.setState(true);   // ON - ready to shoot
+        } else {
+            LED_Red.setState(false);  // OFF - still spinning up/down
+        }
     }
 
     /**
@@ -349,7 +377,10 @@ public class NonBlockTeleop extends OpMode {
         sorterTimer.reset();
     }
 
-    private void updateLEDs(String color) {
+    /**
+     * Update green and blue LEDs for shooter color indication
+     */
+    private void updateColorLEDs(String color) {
         if (color.equals("GREEN")) {
             LED_Green.setState(true);
             LED_Blue.setState(false);
@@ -474,6 +505,10 @@ public class NonBlockTeleop extends OpMode {
     }
 
     private void updateTelemetry(int normPos, String shooterColorDetected) {
+        double currentRPM = (m3.getVelocity() / TICKS_PER_REV) * 60.0;
+        double rpmError = Math.abs(targetRPM - currentRPM);
+        boolean rpmReady = (targetRPM > 0) && (rpmError <= RPM_TOLERANCE);
+
         telemetry.addLine("=== Sorter ===");
         telemetry.addData("Normalized Pos", normPos);
         telemetry.addData("Current Chamber", currentChamber + 1);
@@ -490,9 +525,12 @@ public class NonBlockTeleop extends OpMode {
         telemetry.addData("Intake Color Active", colorActive);
         telemetry.addData("Empty Detection Active", emptyDetectionActive);
         telemetry.addLine();
-        telemetry.addData("Turret Tracking", turretTrackingEnabled ? "ON" : "OFF");
         telemetry.addData("Target RPM (m3)", targetRPM);
-        telemetry.addData("Actual RPM (m3)", ((m3.getVelocity()/TICKS_PER_REV)*60));
+        telemetry.addData("Actual RPM (m3)", String.format("%.0f", currentRPM));
+        telemetry.addData("RPM Error", String.format("%.0f", rpmError));
+        telemetry.addData("RPM Ready (Red LED)", rpmReady ? "YES ✓" : "NO");
+        telemetry.addLine();
+        telemetry.addData("Turret Tracking", turretTrackingEnabled ? "ON" : "OFF");
         telemetry.update();
     }
 
