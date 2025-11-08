@@ -1,9 +1,5 @@
 package org.firstinspires.ftc.teamcode.DriveTrainControl;
 
-import com.arcrobotics.ftclib.controller.PDController;
-import com.qualcomm.hardware.limelightvision.Limelight3A;
-import com.qualcomm.hardware.limelightvision.LLResult;
-import com.qualcomm.hardware.limelightvision.LLResultTypes;
 import com.qualcomm.hardware.rev.RevColorSensorV3;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
@@ -13,24 +9,26 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.DigitalChannel;
 import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.hardware.IMU;
+import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.util.ElapsedTime;
-import com.qualcomm.robotcore.util.Range;
 
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
+import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.vision.VisionPortal;
 import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
 
 import java.util.List;
 
-@TeleOp(name = "Limelight Assisted Intake", group = "DriveTrainControl")
-public class LimelightAssistedIntake extends OpMode {
+@TeleOp(name = "NonBlockTeleop with Body Tracking", group = "DriveTrainControl")
+public class BodyTrackTeleop extends OpMode {
 
     // === Drive Train & Mechanisms ===
     DcMotorEx frontLeftMotor, backLeftMotor, frontRightMotor, backRightMotor;
     DcMotor m1, m2;
     DcMotorEx m3, m0;
-    CRServo s1, s3;
+    CRServo s3;
     Servo s2;
 
     // === Color Sensors & LEDs ===
@@ -43,36 +41,34 @@ public class LimelightAssistedIntake extends OpMode {
     // === Vision & AprilTag ===
     private VisionPortal visionPortal;
     private AprilTagProcessor aprilTag;
-    private PDController turretPD;
+    private IMU imu;
 
-    // === Limelight (Simple threshold-based) ===
-    private Limelight3A limelight;
-    private static final double LIMELIGHT_TOLERANCE = 10.0;  // Degrees deadzone
-    private static final double LIMELIGHT_TURN_POWER = 0.25;  // Fixed gentle turn power
-    private static final double MIN_TARGET_AREA = 0.5;  // Minimum area percentage (filters noise)
-    private boolean limelightAssistActive = false;
-    private String detectedColor = "NONE";
-
-    // === Turret PD constants ===
-    private static final double kP = 0.001;
-    private static final double kD = 0.0006;
-    private static final double acceptableTurretError = .25;
-    private boolean turretTrackingEnabled = false;
-    private boolean lastTurretToggle = false;
+    // === AprilTag Body Alignment PID ===
+    private double kp = 0.012;
+    private double ki = 0.001;
+    private double kd = 0.003;
+    private double integral = 0.0;
+    private double lastError = 0.0;
+    private double lastTime = 0.0;
+    private final double MAX_TURN_POWER = 0.28;
+    private final double MIN_TURN_POWER = 0.02;
+    private final double TOLERANCE_DEG = 0.6;
+    private final double SMOOTHING_ALPHA = 0.2;
+    private double smoothedBearing = 0.0;
+    private boolean bearingInitialized = false;
+    private boolean aprilTagTrackingEnabled = false;
+    private boolean lastBButton = false;
 
     // === Sorter constants ===
     private static final int FULL_ROT = 8192;
     private static final int SLOT = FULL_ROT / 3;
     private static final int OFFSET = (int) (FULL_ROT / 6);
-
-    // ABSOLUTE chamber positions (intake aligned)
     private static final int CHAMBER_0_POS = 0;
     private static final int CHAMBER_1_POS = SLOT;
     private static final int CHAMBER_2_POS = 2 * SLOT;
 
     private boolean[] chamberFull = new boolean[3];
     private int currentChamber = 0;
-
     private boolean shootingMode = false;
     private boolean lastY = false;
     private boolean lastDpadRight = false;
@@ -91,13 +87,6 @@ public class LimelightAssistedIntake extends OpMode {
     private static final long SORTER_TIMEOUT_MS = 2000;
     private static final long SETTLE_MS = 100;
 
-    // === Jam detection ===
-    private int lastSorterPosition = 0;
-    private long lastSorterMoveTime = 0;
-    private static final long JAM_CHECK_INTERVAL_MS = 200;
-    private static final int MIN_MOVEMENT_TICKS = 50;
-    private boolean sorterJammed = false;
-
     // === Timed color detection ===
     private long colorStartTime = 0;
     private boolean colorActive = false;
@@ -114,6 +103,7 @@ public class LimelightAssistedIntake extends OpMode {
     private double targetRPM = 0;
     private boolean lastRightBumper = false;
     private boolean lastLeftBumper = false;
+    private boolean lastDpadLeft = false;
 
     private static final double TICKS_PER_REV = 28.0;
     private static final double RPM_TOLERANCE = 50.0;
@@ -139,7 +129,6 @@ public class LimelightAssistedIntake extends OpMode {
         m3 = hardwareMap.get(DcMotorEx.class, "m3");
         m0 = hardwareMap.get(DcMotorEx.class, "m0");
 
-        s1 = hardwareMap.get(CRServo.class, "s1");
         s2 = hardwareMap.get(Servo.class, "s2");
         s3 = hardwareMap.get(CRServo.class, "s3");
         s3.setDirection(DcMotorSimple.Direction.REVERSE);
@@ -155,7 +144,6 @@ public class LimelightAssistedIntake extends OpMode {
         // === Flywheel motor setup ===
         m3.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         m3.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        m3.setVelocityPIDFCoefficients(8.0, 0.5, 0.0, 12.5);
 
         // === Color Sensors ===
         intakeColor  = hardwareMap.get(RevColorSensorV3.class, "intakeColor");
@@ -172,40 +160,61 @@ public class LimelightAssistedIntake extends OpMode {
         LED_Green.setState(false);
         LED_Blue.setState(false);
 
-        // === Limelight Setup (Simple mode) ===
-        limelight = hardwareMap.get(Limelight3A.class, "Webcam 2");
-        limelight.start();
+        // === IMU Setup ===
+        imu = hardwareMap.get(IMU.class, "imu");
+        IMU.Parameters params = new IMU.Parameters(
+                new RevHubOrientationOnRobot(
+                        RevHubOrientationOnRobot.LogoFacingDirection.UP,
+                        RevHubOrientationOnRobot.UsbFacingDirection.FORWARD
+                )
+        );
+        imu.initialize(params);
+        imu.resetYaw();
 
         // === AprilTag Vision setup ===
-        turretPD = new PDController(kP, kD);
         aprilTag = new AprilTagProcessor.Builder().build();
         visionPortal = new VisionPortal.Builder()
                 .setCamera(hardwareMap.get(WebcamName.class, "Webcam 1"))
                 .addProcessor(aprilTag)
                 .build();
 
-        telemetry.addLine("Limelight Assisted Intake Initialized");
-        telemetry.addLine("Right Trigger: Intake with auto-centering");
-        telemetry.addLine("Targets closest ball (Green or Purple)");
+        lastTime = getTimeSeconds();
+
+        telemetry.addLine("Initialized — Press START");
+        telemetry.addLine("B Button: Toggle AprilTag Body Tracking");
         telemetry.update();
     }
 
     @Override
     public void loop() {
-        // === Check if Limelight Assist should be active ===
-        boolean intakeTriggerPressed = gamepad1.right_trigger > 0.1;
-        limelightAssistActive = intakeTriggerPressed && !shootingMode;
+        // === AprilTag Body Tracking Toggle ===
+        boolean bPressed = gamepad1.b;
+        if (bPressed && !lastBButton) {
+            aprilTagTrackingEnabled = !aprilTagTrackingEnabled;
+            if (!aprilTagTrackingEnabled) {
+                integral = 0.0;
+                lastError = 0.0;
+                bearingInitialized = false;
+            }
+        }
+        lastBButton = bPressed;
 
         // === Drive Train ===
         double y = applyDeadzone(-gamepad1.left_stick_y);
         double x = applyDeadzone(gamepad1.left_stick_x);
         double rx = applyDeadzone(gamepad1.right_stick_x);
 
-        // If limelight assist is active, ADD correction to user input
-        if (limelightAssistActive) {
-            double limelightCorrection = getLimelightCorrection();
-            rx += limelightCorrection;
-            rx = Range.clip(rx, -1.0, 1.0);
+        // === AprilTag Body Alignment ===
+        if (aprilTagTrackingEnabled) {
+            double bodyCorrection = getAprilTagBodyCorrection();
+            if (bodyCorrection != 0) {
+               rx = -bodyCorrection;
+            }
+        } else {
+            bearingInitialized = false;
+            integral = 0.0;
+            lastError = 0.0;
+            lastTime = getTimeSeconds();
         }
 
         double fl = y + x + rx, bl = y - x + rx, fr = y - x - rx, br = y + x - rx;
@@ -216,13 +225,11 @@ public class LimelightAssistedIntake extends OpMode {
         frontRightMotor.setPower(clipLowPower(fr / max));
         backRightMotor.setPower(clipLowPower(br / max));
 
-        // === Non-blocking sorter movement ===
+        // === Sorter ===
         updateSorterMovement();
-
         int rawPos = m2.getCurrentPosition();
         int normPos = normalize(rawPos);
 
-        // ===== Shooting Mode Toggle =====
         boolean yPressed = gamepad1.y;
         if (yPressed && !lastY) {
             shootingMode = !shootingMode;
@@ -231,7 +238,6 @@ public class LimelightAssistedIntake extends OpMode {
         }
         lastY = yPressed;
 
-        // ===== Manual chamber advance in shooting mode =====
         if (shootingMode) {
             boolean dpadRightPressed = gamepad1.dpad_right;
             if (dpadRightPressed && !lastDpadRight) {
@@ -242,24 +248,16 @@ public class LimelightAssistedIntake extends OpMode {
             lastDpadRight = dpadRightPressed;
         }
 
-        // === Manual jam clear (Dpad Up) ===
-        if (gamepad1.dpad_up && sorterJammed) {
-            sorterJammed = false;
-            telemetry.addLine("Jam cleared - sorter ready");
-        }
-
-        // ===== Auto-rotate only in intake mode =====
         if (!shootingMode) {
             autoIntakeColorCheck();
         } else {
             checkChamberEmpty();
         }
 
-        // ===== Detect shooter color and update LEDs =====
         String shooterColorDetected = detectShooterColor();
         updateColorLEDs(shooterColorDetected);
 
-        // === Intake motors (always responsive) ===
+        // === Intake ===
         if (!shootingMode) {
             double triggerPower = gamepad1.right_trigger - gamepad1.left_trigger;
             m1.setPower(-triggerPower);
@@ -269,7 +267,7 @@ public class LimelightAssistedIntake extends OpMode {
             m2.setPower(0);
         }
 
-        // === Shooter (s2, s3) ===
+        // === Shooter ===
         if (gamepad1.a) {
             s2.setPosition(0);
             s3.setPower(1.0);
@@ -278,125 +276,72 @@ public class LimelightAssistedIntake extends OpMode {
             s3.setPower(0.0);
         }
 
-        // === Shooter RPM with velocity control ===
+        // === Flywheel RPM ===
         if (gamepad1.right_bumper && !lastRightBumper) {
             presetIndex = (presetIndex + 1) % rpmPresets.length;
             targetRPM = rpmPresets[presetIndex];
         } else if (gamepad1.left_bumper && !lastLeftBumper) {
             targetRPM = 0;
+        } else if (gamepad1.dpad_left && !lastDpadLeft) {
+            targetRPM = -2000;
         }
         lastRightBumper = gamepad1.right_bumper;
         lastLeftBumper = gamepad1.left_bumper;
+        lastDpadLeft = gamepad1.dpad_left;
 
         double targetTicksPerSec = (targetRPM / 60.0) * TICKS_PER_REV;
         m3.setVelocity(targetTicksPerSec);
 
-        // === Update RPM LED ===
         updateRPMLED();
-
-        // === Turret Tracking Toggle ===
-        if (gamepad1.b && !lastTurretToggle) {
-            turretTrackingEnabled = !turretTrackingEnabled;
-        }
-        lastTurretToggle = gamepad1.b;
-
-        // === Turret Tracking (only when limelight assist is not active) ===
-        if (turretTrackingEnabled && !limelightAssistActive) {
-            List<AprilTagDetection> detections = aprilTag.getDetections();
-            if (!detections.isEmpty()) {
-                AprilTagDetection det = detections.get(0);
-                double tagX = det.center.x;
-                double errorX = tagX - (640.0 / 2.0);
-
-                if (Math.abs(errorX) > acceptableTurretError) {
-                    turretPD.setSetPoint(0);
-                    double turretPow = turretPD.calculate(errorX);
-                    turretPow = Range.clip(turretPow, -.75, .75);
-                    s1.setPower(turretPow);
-                } else {
-                    s1.setPower(0);
-                }
-            } else {
-                s1.setPower(0);
-            }
-        } else {
-            s1.setPower(0);
-        }
-
         updateTelemetry(normPos, shooterColorDetected);
     }
 
-    /**
-     * Get Limelight correction for auto-centering on ball
-     * Simple threshold-based approach - less volatile, more predictable
-     */
-    private double getLimelightCorrection() {
-        LLResultTypes.ColorResult bestTarget = null;
-        double bestArea = 0;
-        String bestColor = "NONE";
-        double bestTx = 0;
+    private double getAprilTagBodyCorrection() {
+        List<AprilTagDetection> detections = aprilTag.getDetections();
 
-        // Check pipeline 0 (GREEN) - give it time to update
-        limelight.pipelineSwitch(0);
-        try { Thread.sleep(10); } catch (InterruptedException e) {}
-        LLResult greenResult = limelight.getLatestResult();
+        if (!detections.isEmpty() && detections.get(0).ftcPose != null) {
+            AprilTagDetection det = detections.get(0);
+            double bearing = det.ftcPose.bearing;
 
-        if (greenResult != null && greenResult.isValid()) {
-            List<LLResultTypes.ColorResult> greenTargets = greenResult.getColorResults();
-            if (greenTargets != null && !greenTargets.isEmpty()) {
-                LLResultTypes.ColorResult greenTarget = greenTargets.get(0);
-                double greenArea = greenTarget.getTargetArea();
-                if (greenArea > MIN_TARGET_AREA) {
-                    bestTarget = greenTarget;
-                    bestArea = greenArea;
-                    bestColor = "GREEN";
-                    bestTx = greenTarget.getTargetXDegrees();
-                }
-            }
-        }
-
-        // Check pipeline 1 (PURPLE) - give it time to update
-        limelight.pipelineSwitch(1);
-        try { Thread.sleep(10); } catch (InterruptedException e) {}
-        LLResult purpleResult = limelight.getLatestResult();
-
-        if (purpleResult != null && purpleResult.isValid()) {
-            List<LLResultTypes.ColorResult> purpleTargets = purpleResult.getColorResults();
-            if (purpleTargets != null && !purpleTargets.isEmpty()) {
-                LLResultTypes.ColorResult purpleTarget = purpleTargets.get(0);
-                double purpleArea = purpleTarget.getTargetArea();
-                if (purpleArea > MIN_TARGET_AREA && purpleArea > bestArea) {
-                    bestTarget = purpleTarget;
-                    bestArea = purpleArea;
-                    bestColor = "PURPLE";
-                    bestTx = purpleTarget.getTargetXDegrees();
-                }
-            }
-        }
-
-        // Update detected color for telemetry
-        detectedColor = bestColor;
-
-        // If we found a valid target, use simple threshold approach
-        if (bestTarget != null) {
-            // Simple threshold-based control
-            // tx > 0 means target is to the RIGHT
-            // tx < 0 means target is to the LEFT
-            if (bestTx > LIMELIGHT_TOLERANCE) {
-                // Ball is to the right, turn right (positive)
-                return LIMELIGHT_TURN_POWER;
-            } else if (bestTx < -LIMELIGHT_TOLERANCE) {
-                // Ball is to the left, turn left (negative)
-                return -LIMELIGHT_TURN_POWER;
+            if (!bearingInitialized) {
+                smoothedBearing = bearing;
+                bearingInitialized = true;
             } else {
-                // Within deadzone, centered
-                return 0;
+                smoothedBearing = SMOOTHING_ALPHA * bearing + (1.0 - SMOOTHING_ALPHA) * smoothedBearing;
             }
-        }
 
-        // No target found, don't rotate
-        detectedColor = "NONE";
-        return 0;
+            double imuHeading = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES);
+            double desiredHeading = wrapAngle(imuHeading + smoothedBearing);
+            double error = wrapAngle(desiredHeading - imuHeading);
+
+            double now = getTimeSeconds();
+            double dt = now - lastTime;
+            if (dt <= 0) dt = 1e-6;
+
+            integral += error * dt;
+            integral = clamp(integral, -100.0, 100.0);
+
+            double derivative = (error - lastError) / dt;
+            double pidOut = kp * error + ki * integral + kd * derivative;
+            pidOut = clamp(pidOut, -MAX_TURN_POWER, MAX_TURN_POWER);
+
+            if (Math.abs(error) < TOLERANCE_DEG) {
+                pidOut = 0.0;
+                integral = 0.0;
+            } else if (Math.abs(pidOut) < MIN_TURN_POWER) {
+                pidOut = Math.copySign(MIN_TURN_POWER, pidOut);
+            }
+
+            lastError = error;
+            lastTime = now;
+            return pidOut;
+        } else {
+            bearingInitialized = false;
+            integral = 0.0;
+            lastError = 0.0;
+            lastTime = getTimeSeconds();
+            return 0;
+        }
     }
 
     private void updateRPMLED() {
@@ -404,15 +349,9 @@ public class LimelightAssistedIntake extends OpMode {
             LED_Red.setState(false);
             return;
         }
-
         double currentRPM = (m3.getVelocity() / TICKS_PER_REV) * 60.0;
         double rpmError = Math.abs(targetRPM - currentRPM);
-
-        if (rpmError <= RPM_TOLERANCE) {
-            LED_Red.setState(true);
-        } else {
-            LED_Red.setState(false);
-        }
+        LED_Red.setState(rpmError <= RPM_TOLERANCE);
     }
 
     private void updateSorterMovement() {
@@ -420,23 +359,6 @@ public class LimelightAssistedIntake extends OpMode {
 
         int pos = normalize(m2.getCurrentPosition());
         int error = calculateShortestError(pos, sorterTargetPosition);
-
-        // === JAM DETECTION ===
-        long currentTime = System.currentTimeMillis();
-        if (currentTime - lastSorterMoveTime >= JAM_CHECK_INTERVAL_MS) {
-            int positionChange = Math.abs(pos - lastSorterPosition);
-
-            if (positionChange < MIN_MOVEMENT_TICKS && Math.abs(error) > PERFECT_TOL) {
-                sorterJammed = true;
-                m0.setPower(0);
-                sorterMoving = false;
-                sorterSettling = false;
-                return;
-            }
-
-            lastSorterPosition = pos;
-            lastSorterMoveTime = currentTime;
-        }
 
         if (sorterTimer.milliseconds() > SORTER_TIMEOUT_MS) {
             m0.setPower(0);
@@ -483,18 +405,10 @@ public class LimelightAssistedIntake extends OpMode {
     }
 
     private void startSorterMove(int targetPosition) {
-        if (sorterJammed) {
-            telemetry.addLine("⚠️ Cannot move - sorter jammed! Press Dpad Up to clear");
-            return;
-        }
-
         sorterTargetPosition = targetPosition;
         sorterMoving = true;
         sorterSettling = false;
         sorterTimer.reset();
-
-        lastSorterPosition = normalize(m2.getCurrentPosition());
-        lastSorterMoveTime = System.currentTimeMillis();
     }
 
     private void updateColorLEDs(String color) {
@@ -626,75 +540,53 @@ public class LimelightAssistedIntake extends OpMode {
         double rpmError = Math.abs(targetRPM - currentRPM);
         boolean rpmReady = (targetRPM > 0) && (rpmError <= RPM_TOLERANCE);
 
-        double llTx = 0;
-        boolean llCentered = false;
-        double llArea = 0;
+        List<AprilTagDetection> detections = aprilTag.getDetections();
+        boolean hasTarget = !detections.isEmpty() && detections.get(0).ftcPose != null;
 
-        telemetry.addLine("=== Limelight Assist ===");
-        telemetry.addData("Active", limelightAssistActive ? "YES" : "NO");
-        telemetry.addData("Right Trigger", String.format("%.2f", gamepad1.right_trigger));
-        telemetry.addData("Target Detected", detectedColor);
-
-        if (!detectedColor.equals("NONE")) {
-            if (detectedColor.equals("GREEN")) {
-                limelight.pipelineSwitch(0);
-            } else {
-                limelight.pipelineSwitch(1);
-            }
-            try { Thread.sleep(5); } catch (InterruptedException e) {}
-            LLResult result = limelight.getLatestResult();
-            if (result != null && result.isValid() && result.getColorResults() != null && !result.getColorResults().isEmpty()) {
-                LLResultTypes.ColorResult target = result.getColorResults().get(0);
-                llTx = target.getTargetXDegrees();
-                llArea = target.getTargetArea();
-                llCentered = Math.abs(llTx) < LIMELIGHT_TOLERANCE;
-
-                telemetry.addData("Horizontal Offset (tx)", String.format("%.2f°", llTx));
-                telemetry.addData("Target Area", String.format("%.2f%%", llArea));
-                telemetry.addData("Centered", llCentered ? "YES ✓" : "NO");
-
-                // Show what correction is being applied
-                double correction = 0;
-                if (llTx > LIMELIGHT_TOLERANCE) {
-                    correction = LIMELIGHT_TURN_POWER;
-                } else if (llTx < -LIMELIGHT_TOLERANCE) {
-                    correction = -LIMELIGHT_TURN_POWER;
-                }
-                telemetry.addData("Turn Correction", String.format("%.2f", correction));
-            }
-        } else {
-            telemetry.addData("No targets above", String.format("%.1f%% area", MIN_TARGET_AREA));
+        telemetry.addLine("=== AprilTag Body Tracking ===");
+        telemetry.addData("Active", aprilTagTrackingEnabled ? "YES" : "NO (B to toggle)");
+        if (aprilTagTrackingEnabled && hasTarget) {
+            AprilTagDetection det = detections.get(0);
+            double imuHeading = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES);
+            telemetry.addData("Tag ID", det.id);
+            telemetry.addData("Bearing", String.format("%.2f°", smoothedBearing));
+            telemetry.addData("IMU Heading", String.format("%.2f°", imuHeading));
+            telemetry.addData("Error", String.format("%.2f°", lastError));
+            telemetry.addData("Aligned", Math.abs(lastError) < TOLERANCE_DEG ? "YES ✓" : "NO");
         }
         telemetry.addLine();
 
         telemetry.addLine("=== Sorter ===");
-        telemetry.addData("Normalized Pos", normPos);
-        telemetry.addData("Current Chamber", currentChamber + 1);
-        telemetry.addData("Sorter Moving", sorterMoving);
-        telemetry.addData("Jammed", sorterJammed ? "⚠️ YES (Dpad Up)" : "NO");
-        telemetry.addLine();
-        telemetry.addData("Ch1/Ch2/Ch3", String.format("%s/%s/%s",
+        telemetry.addData("Pos", normPos);
+        telemetry.addData("Chamber", currentChamber + 1);
+        telemetry.addData("Moving", sorterMoving);
+        telemetry.addData("Ch1/2/3", String.format("%s/%s/%s",
                 chamberFull[0] ? "●" : "○",
                 chamberFull[1] ? "●" : "○",
                 chamberFull[2] ? "●" : "○"));
         telemetry.addData("Mode", shootingMode ? "SHOOT" : "INTAKE");
-        telemetry.addData("Color to Shoot", shooterColorDetected);
+        telemetry.addData("Color", shooterColorDetected);
         telemetry.addLine();
 
         telemetry.addData("Target RPM", targetRPM);
         telemetry.addData("Actual RPM", String.format("%.0f", currentRPM));
         telemetry.addData("Ready", rpmReady ? "YES ✓" : "NO");
-        telemetry.addLine();
-        telemetry.addData("Turret Tracking", turretTrackingEnabled ? "ON" : "OFF");
         telemetry.update();
     }
 
+    private double getTimeSeconds() { return System.nanoTime() / 1e9; }
+    private static double clamp(double v, double lo, double hi) { return Math.max(lo, Math.min(hi, v)); }
+    private static double wrapAngle(double angle) {
+        angle %= 360.0;
+        if (angle <= -180.0) angle += 360.0;
+        if (angle > 180.0) angle -= 360.0;
+        return angle;
+    }
     private double applyDeadzone(double v) { return Math.abs(v) < 0.05 ? 0 : v; }
     private double clipLowPower(double p) { return Math.abs(p) < 0.04 ? 0 : p; }
 
     @Override
     public void stop() {
         if (visionPortal != null) visionPortal.close();
-        if (limelight != null) limelight.stop();
     }
 }
