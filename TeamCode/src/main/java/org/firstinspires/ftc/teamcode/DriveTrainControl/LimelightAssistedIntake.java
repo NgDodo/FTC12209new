@@ -1,6 +1,5 @@
 package org.firstinspires.ftc.teamcode.DriveTrainControl;
 
-import com.arcrobotics.ftclib.controller.PDController;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.hardware.limelightvision.LLResult;
 import com.qualcomm.hardware.limelightvision.LLResultTypes;
@@ -13,13 +12,16 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.DigitalChannel;
 import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.hardware.IMU;
+import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.util.ElapsedTime;
-import com.qualcomm.robotcore.util.Range;
 
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
+import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.vision.VisionPortal;
 import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
+import com.arcrobotics.ftclib.controller.PDController;
 
 import java.util.List;
 
@@ -44,14 +46,27 @@ public class LimelightAssistedIntake extends OpMode {
     private VisionPortal visionPortal;
     private AprilTagProcessor aprilTag;
     private PDController turretPD;
+    private IMU imu;
 
-    // === Limelight (Simple threshold-based) ===
+    // === Limelight Ball Tracking (IMU-based like AprilTag) ===
     private Limelight3A limelight;
-    private static final double LIMELIGHT_TOLERANCE = 10.0;  // Degrees deadzone
-    private static final double LIMELIGHT_TURN_POWER = 0.25;  // Fixed gentle turn power
-    private static final double MIN_TARGET_AREA = 0.5;  // Minimum area percentage (filters noise)
+    private static final double MIN_TARGET_AREA = 1.0;  // Minimum 1% area - filters small detections
     private boolean limelightAssistActive = false;
     private String detectedColor = "NONE";
+
+    // PID constants for ball tracking (same as AprilTag tracking)
+    private double ballKp = 0.012;
+    private double ballKi = 0.001;
+    private double ballKd = 0.003;
+    private double ballIntegral = 0.0;
+    private double ballLastError = 0.0;
+    private double ballLastTime = 0.0;
+    private final double BALL_MAX_TURN_POWER = 0.28;
+    private final double BALL_MIN_TURN_POWER = 0.02;
+    private final double BALL_TOLERANCE_DEG = 0.6;
+    private final double BALL_SMOOTHING_ALPHA = 0.2;
+    private double smoothedBallBearing = 0.0;
+    private boolean ballBearingInitialized = false;
 
     // === Turret PD constants ===
     private static final double kP = 0.001;
@@ -64,15 +79,12 @@ public class LimelightAssistedIntake extends OpMode {
     private static final int FULL_ROT = 8192;
     private static final int SLOT = FULL_ROT / 3;
     private static final int OFFSET = (int) (FULL_ROT / 6);
-
-    // ABSOLUTE chamber positions (intake aligned)
     private static final int CHAMBER_0_POS = 0;
     private static final int CHAMBER_1_POS = SLOT;
     private static final int CHAMBER_2_POS = 2 * SLOT;
 
     private boolean[] chamberFull = new boolean[3];
     private int currentChamber = 0;
-
     private boolean shootingMode = false;
     private boolean lastY = false;
     private boolean lastDpadRight = false;
@@ -172,7 +184,18 @@ public class LimelightAssistedIntake extends OpMode {
         LED_Green.setState(false);
         LED_Blue.setState(false);
 
-        // === Limelight Setup (Simple mode) ===
+        // === IMU Setup ===
+        imu = hardwareMap.get(IMU.class, "imu");
+        IMU.Parameters imuParams = new IMU.Parameters(
+                new RevHubOrientationOnRobot(
+                        RevHubOrientationOnRobot.LogoFacingDirection.UP,
+                        RevHubOrientationOnRobot.UsbFacingDirection.FORWARD
+                )
+        );
+        imu.initialize(imuParams);
+        imu.resetYaw();
+
+        // === Limelight Setup ===
         limelight = hardwareMap.get(Limelight3A.class, "Webcam 2");
         limelight.start();
 
@@ -184,9 +207,10 @@ public class LimelightAssistedIntake extends OpMode {
                 .addProcessor(aprilTag)
                 .build();
 
-        telemetry.addLine("Limelight Assisted Intake Initialized");
-        telemetry.addLine("Right Trigger: Intake with auto-centering");
-        telemetry.addLine("Targets closest ball (Green or Purple)");
+        ballLastTime = getTimeSeconds();
+
+        telemetry.addLine("Limelight Ball Tracking Initialized");
+        telemetry.addLine("Right Trigger: Intake with IMU-based tracking");
         telemetry.update();
     }
 
@@ -201,11 +225,18 @@ public class LimelightAssistedIntake extends OpMode {
         double x = applyDeadzone(gamepad1.left_stick_x);
         double rx = applyDeadzone(gamepad1.right_stick_x);
 
-        // If limelight assist is active, ADD correction to user input
+        // === Ball Tracking (IMU-based like AprilTag) ===
         if (limelightAssistActive) {
-            double limelightCorrection = getLimelightCorrection();
-            rx += limelightCorrection;
-            rx = Range.clip(rx, -1.0, 1.0);
+            double ballCorrection = getBallTrackingCorrection();
+            if (ballCorrection != 0) {
+                rx = ballCorrection;  // Override rotation
+            }
+        } else {
+            // Reset tracking state
+            ballBearingInitialized = false;
+            ballIntegral = 0.0;
+            ballLastError = 0.0;
+            ballLastTime = getTimeSeconds();
         }
 
         double fl = y + x + rx, bl = y - x + rx, fr = y - x - rx, br = y + x - rx;
@@ -216,13 +247,11 @@ public class LimelightAssistedIntake extends OpMode {
         frontRightMotor.setPower(clipLowPower(fr / max));
         backRightMotor.setPower(clipLowPower(br / max));
 
-        // === Non-blocking sorter movement ===
+        // === Sorter ===
         updateSorterMovement();
-
         int rawPos = m2.getCurrentPosition();
         int normPos = normalize(rawPos);
 
-        // ===== Shooting Mode Toggle =====
         boolean yPressed = gamepad1.y;
         if (yPressed && !lastY) {
             shootingMode = !shootingMode;
@@ -231,7 +260,6 @@ public class LimelightAssistedIntake extends OpMode {
         }
         lastY = yPressed;
 
-        // ===== Manual chamber advance in shooting mode =====
         if (shootingMode) {
             boolean dpadRightPressed = gamepad1.dpad_right;
             if (dpadRightPressed && !lastDpadRight) {
@@ -242,24 +270,21 @@ public class LimelightAssistedIntake extends OpMode {
             lastDpadRight = dpadRightPressed;
         }
 
-        // === Manual jam clear (Dpad Up) ===
+        // === Manual jam clear ===
         if (gamepad1.dpad_up && sorterJammed) {
             sorterJammed = false;
-            telemetry.addLine("Jam cleared - sorter ready");
         }
 
-        // ===== Auto-rotate only in intake mode =====
         if (!shootingMode) {
             autoIntakeColorCheck();
         } else {
             checkChamberEmpty();
         }
 
-        // ===== Detect shooter color and update LEDs =====
         String shooterColorDetected = detectShooterColor();
         updateColorLEDs(shooterColorDetected);
 
-        // === Intake motors (always responsive) ===
+        // === Intake ===
         if (!shootingMode) {
             double triggerPower = gamepad1.right_trigger - gamepad1.left_trigger;
             m1.setPower(-triggerPower);
@@ -269,7 +294,7 @@ public class LimelightAssistedIntake extends OpMode {
             m2.setPower(0);
         }
 
-        // === Shooter (s2, s3) ===
+        // === Shooter ===
         if (gamepad1.a) {
             s2.setPosition(0);
             s3.setPower(1.0);
@@ -278,7 +303,7 @@ public class LimelightAssistedIntake extends OpMode {
             s3.setPower(0.0);
         }
 
-        // === Shooter RPM with velocity control ===
+        // === Flywheel RPM ===
         if (gamepad1.right_bumper && !lastRightBumper) {
             presetIndex = (presetIndex + 1) % rpmPresets.length;
             targetRPM = rpmPresets[presetIndex];
@@ -291,16 +316,14 @@ public class LimelightAssistedIntake extends OpMode {
         double targetTicksPerSec = (targetRPM / 60.0) * TICKS_PER_REV;
         m3.setVelocity(targetTicksPerSec);
 
-        // === Update RPM LED ===
         updateRPMLED();
 
-        // === Turret Tracking Toggle ===
+        // === Turret Tracking ===
         if (gamepad1.b && !lastTurretToggle) {
             turretTrackingEnabled = !turretTrackingEnabled;
         }
         lastTurretToggle = gamepad1.b;
 
-        // === Turret Tracking (only when limelight assist is not active) ===
         if (turretTrackingEnabled && !limelightAssistActive) {
             List<AprilTagDetection> detections = aprilTag.getDetections();
             if (!detections.isEmpty()) {
@@ -311,7 +334,7 @@ public class LimelightAssistedIntake extends OpMode {
                 if (Math.abs(errorX) > acceptableTurretError) {
                     turretPD.setSetPoint(0);
                     double turretPow = turretPD.calculate(errorX);
-                    turretPow = Range.clip(turretPow, -.75, .75);
+                    turretPow = com.qualcomm.robotcore.util.Range.clip(turretPow, -.75, .75);
                     s1.setPower(turretPow);
                 } else {
                     s1.setPower(0);
@@ -327,20 +350,23 @@ public class LimelightAssistedIntake extends OpMode {
     }
 
     /**
-     * Get Limelight correction for auto-centering on ball
-     * Simple threshold-based approach - less volatile, more predictable
+     * IMU-based ball tracking using PID (same approach as AprilTag tracking)
      */
-    private double getLimelightCorrection() {
-        LLResultTypes.ColorResult bestTarget = null;
-        double bestArea = 0;
-        String bestColor = "NONE";
-        double bestTx = 0;
-
-        // Check pipeline 0 (GREEN) - give it time to update
+    private double getBallTrackingCorrection() {
+        // Check both pipelines for best target
         limelight.pipelineSwitch(0);
         try { Thread.sleep(10); } catch (InterruptedException e) {}
         LLResult greenResult = limelight.getLatestResult();
 
+        limelight.pipelineSwitch(1);
+        try { Thread.sleep(10); } catch (InterruptedException e) {}
+        LLResult purpleResult = limelight.getLatestResult();
+
+        LLResultTypes.ColorResult bestTarget = null;
+        double bestArea = 0;
+        double ballBearing = 0;
+
+        // Check green
         if (greenResult != null && greenResult.isValid()) {
             List<LLResultTypes.ColorResult> greenTargets = greenResult.getColorResults();
             if (greenTargets != null && !greenTargets.isEmpty()) {
@@ -349,17 +375,13 @@ public class LimelightAssistedIntake extends OpMode {
                 if (greenArea > MIN_TARGET_AREA) {
                     bestTarget = greenTarget;
                     bestArea = greenArea;
-                    bestColor = "GREEN";
-                    bestTx = greenTarget.getTargetXDegrees();
+                    detectedColor = "GREEN";
+                    ballBearing = greenTarget.getTargetXDegrees();
                 }
             }
         }
 
-        // Check pipeline 1 (PURPLE) - give it time to update
-        limelight.pipelineSwitch(1);
-        try { Thread.sleep(10); } catch (InterruptedException e) {}
-        LLResult purpleResult = limelight.getLatestResult();
-
+        // Check purple
         if (purpleResult != null && purpleResult.isValid()) {
             List<LLResultTypes.ColorResult> purpleTargets = purpleResult.getColorResults();
             if (purpleTargets != null && !purpleTargets.isEmpty()) {
@@ -368,35 +390,61 @@ public class LimelightAssistedIntake extends OpMode {
                 if (purpleArea > MIN_TARGET_AREA && purpleArea > bestArea) {
                     bestTarget = purpleTarget;
                     bestArea = purpleArea;
-                    bestColor = "PURPLE";
-                    bestTx = purpleTarget.getTargetXDegrees();
+                    detectedColor = "PURPLE";
+                    ballBearing = purpleTarget.getTargetXDegrees();
                 }
             }
         }
 
-        // Update detected color for telemetry
-        detectedColor = bestColor;
-
-        // If we found a valid target, use simple threshold approach
+        // If we found a ball, use IMU-based PID tracking
         if (bestTarget != null) {
-            // Simple threshold-based control
-            // tx > 0 means target is to the RIGHT
-            // tx < 0 means target is to the LEFT
-            if (bestTx > LIMELIGHT_TOLERANCE) {
-                // Ball is to the right, turn right (positive)
-                return LIMELIGHT_TURN_POWER;
-            } else if (bestTx < -LIMELIGHT_TOLERANCE) {
-                // Ball is to the left, turn left (negative)
-                return -LIMELIGHT_TURN_POWER;
+            // Smooth the bearing (like AprilTag code)
+            if (!ballBearingInitialized) {
+                smoothedBallBearing = ballBearing;
+                ballBearingInitialized = true;
             } else {
-                // Within deadzone, centered
-                return 0;
+                smoothedBallBearing = BALL_SMOOTHING_ALPHA * ballBearing +
+                        (1.0 - BALL_SMOOTHING_ALPHA) * smoothedBallBearing;
             }
-        }
 
-        // No target found, don't rotate
-        detectedColor = "NONE";
-        return 0;
+            // Get current IMU heading
+            double imuHeading = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES);
+            double desiredHeading = wrapAngle(imuHeading + smoothedBallBearing);
+            double error = wrapAngle(desiredHeading - imuHeading);
+
+            // PID calculation (same as AprilTag code)
+            double now = getTimeSeconds();
+            double dt = now - ballLastTime;
+            if (dt <= 0) dt = 1e-6;
+
+            ballIntegral += error * dt;
+            ballIntegral = clamp(ballIntegral, -100.0, 100.0);
+
+            double derivative = (error - ballLastError) / dt;
+            double pidOut = ballKp * error + ballKi * ballIntegral + ballKd * derivative;
+            pidOut = clamp(pidOut, -BALL_MAX_TURN_POWER, BALL_MAX_TURN_POWER);
+
+            // Stop if within tolerance
+            if (Math.abs(error) < BALL_TOLERANCE_DEG) {
+                pidOut = 0.0;
+                ballIntegral = 0.0;
+            } else if (Math.abs(pidOut) < BALL_MIN_TURN_POWER) {
+                pidOut = Math.copySign(BALL_MIN_TURN_POWER, pidOut);
+            }
+
+            ballLastError = error;
+            ballLastTime = now;
+
+            return pidOut;
+        } else {
+            // No target found
+            detectedColor = "NONE";
+            ballBearingInitialized = false;
+            ballIntegral = 0.0;
+            ballLastError = 0.0;
+            ballLastTime = getTimeSeconds();
+            return 0;
+        }
     }
 
     private void updateRPMLED() {
@@ -404,15 +452,9 @@ public class LimelightAssistedIntake extends OpMode {
             LED_Red.setState(false);
             return;
         }
-
         double currentRPM = (m3.getVelocity() / TICKS_PER_REV) * 60.0;
         double rpmError = Math.abs(targetRPM - currentRPM);
-
-        if (rpmError <= RPM_TOLERANCE) {
-            LED_Red.setState(true);
-        } else {
-            LED_Red.setState(false);
-        }
+        LED_Red.setState(rpmError <= RPM_TOLERANCE);
     }
 
     private void updateSorterMovement() {
@@ -421,11 +463,9 @@ public class LimelightAssistedIntake extends OpMode {
         int pos = normalize(m2.getCurrentPosition());
         int error = calculateShortestError(pos, sorterTargetPosition);
 
-        // === JAM DETECTION ===
         long currentTime = System.currentTimeMillis();
         if (currentTime - lastSorterMoveTime >= JAM_CHECK_INTERVAL_MS) {
             int positionChange = Math.abs(pos - lastSorterPosition);
-
             if (positionChange < MIN_MOVEMENT_TICKS && Math.abs(error) > PERFECT_TOL) {
                 sorterJammed = true;
                 m0.setPower(0);
@@ -433,7 +473,6 @@ public class LimelightAssistedIntake extends OpMode {
                 sorterSettling = false;
                 return;
             }
-
             lastSorterPosition = pos;
             lastSorterMoveTime = currentTime;
         }
@@ -483,16 +522,11 @@ public class LimelightAssistedIntake extends OpMode {
     }
 
     private void startSorterMove(int targetPosition) {
-        if (sorterJammed) {
-            telemetry.addLine("⚠️ Cannot move - sorter jammed! Press Dpad Up to clear");
-            return;
-        }
-
+        if (sorterJammed) return;
         sorterTargetPosition = targetPosition;
         sorterMoving = true;
         sorterSettling = false;
         sorterTimer.reset();
-
         lastSorterPosition = normalize(m2.getCurrentPosition());
         lastSorterMoveTime = System.currentTimeMillis();
     }
@@ -518,28 +552,22 @@ public class LimelightAssistedIntake extends OpMode {
             case 2: basePos = CHAMBER_2_POS; break;
             default: basePos = CHAMBER_0_POS;
         }
-        if (shooting) {
-            basePos = normalize(basePos + OFFSET);
-        }
+        if (shooting) basePos = normalize(basePos + OFFSET);
         return basePos;
     }
 
     private void autoIntakeColorCheck() {
         if (allChambersFull() || sorterMoving) return;
-
         String detected = detectIntakeColor();
-
         if (detected.equals("NONE")) {
             colorActive = false;
             colorStartTime = 0;
             return;
         }
-
         if (!colorActive) {
             colorActive = true;
             colorStartTime = System.currentTimeMillis();
         }
-
         if (System.currentTimeMillis() - colorStartTime >= DETECT_TIME_MS) {
             if (!chamberFull[currentChamber]) {
                 chamberFull[currentChamber] = true;
@@ -558,20 +586,16 @@ public class LimelightAssistedIntake extends OpMode {
             emptyStartTime = 0;
             return;
         }
-
         String detected = detectShooterColor();
-
         if (!detected.equals("NONE")) {
             emptyDetectionActive = false;
             emptyStartTime = 0;
             return;
         }
-
         if (!emptyDetectionActive) {
             emptyDetectionActive = true;
             emptyStartTime = System.currentTimeMillis();
         }
-
         if (System.currentTimeMillis() - emptyStartTime >= EMPTY_DETECT_TIME_MS) {
             chamberFull[currentChamber] = false;
             emptyDetectionActive = false;
@@ -580,115 +604,71 @@ public class LimelightAssistedIntake extends OpMode {
     }
 
     private String detectIntakeColor() {
-        int r = intakeColor.red();
-        int g = intakeColor.green();
-        int b = intakeColor.blue();
+        int r = intakeColor.red(), g = intakeColor.green(), b = intakeColor.blue();
         if (g > r && g > b && g > 80 && g < 600) return "GREEN";
         if (b > r && b > g && b > 80 && b < 600) return "PURPLE";
         return "NONE";
     }
 
     private String detectShooterColor() {
-        int r = shooterColor.red();
-        int g = shooterColor.green();
-        int b = shooterColor.blue();
+        int r = shooterColor.red(), g = shooterColor.green(), b = shooterColor.blue();
         if (g > r && g > b && g > 80 && g < 600) return "GREEN";
         if (b > r && b > g && b > 80 && b < 600) return "PURPLE";
         return "NONE";
     }
 
-    private boolean allChambersFull() {
-        return chamberFull[0] && chamberFull[1] && chamberFull[2];
-    }
-
-    private int nextChamber(int c) {
-        if (c == 1) return 0;
-        if (c == 0) return 2;
-        return 1;
-    }
-
-    private int normalize(int ticks) {
-        return ((ticks % FULL_ROT) + FULL_ROT) % FULL_ROT;
-    }
-
+    private boolean allChambersFull() { return chamberFull[0] && chamberFull[1] && chamberFull[2]; }
+    private int nextChamber(int c) { if (c == 1) return 0; if (c == 0) return 2; return 1; }
+    private int normalize(int ticks) { return ((ticks % FULL_ROT) + FULL_ROT) % FULL_ROT; }
     private int calculateShortestError(int current, int target) {
         int error = target - current;
-        if (error > FULL_ROT / 2) {
-            error -= FULL_ROT;
-        } else if (error < -FULL_ROT / 2) {
-            error += FULL_ROT;
-        }
+        if (error > FULL_ROT / 2) error -= FULL_ROT;
+        else if (error < -FULL_ROT / 2) error += FULL_ROT;
         return error;
     }
 
     private void updateTelemetry(int normPos, String shooterColorDetected) {
         double currentRPM = (m3.getVelocity() / TICKS_PER_REV) * 60.0;
-        double rpmError = Math.abs(targetRPM - currentRPM);
-        boolean rpmReady = (targetRPM > 0) && (rpmError <= RPM_TOLERANCE);
+        boolean rpmReady = (targetRPM > 0) && (Math.abs(targetRPM - currentRPM) <= RPM_TOLERANCE);
 
-        double llTx = 0;
-        boolean llCentered = false;
-        double llArea = 0;
-
-        telemetry.addLine("=== Limelight Assist ===");
+        telemetry.addLine("=== Limelight Ball Tracking ===");
         telemetry.addData("Active", limelightAssistActive ? "YES" : "NO");
-        telemetry.addData("Right Trigger", String.format("%.2f", gamepad1.right_trigger));
-        telemetry.addData("Target Detected", detectedColor);
-
+        telemetry.addData("Ball Detected", detectedColor);
         if (!detectedColor.equals("NONE")) {
-            if (detectedColor.equals("GREEN")) {
-                limelight.pipelineSwitch(0);
-            } else {
-                limelight.pipelineSwitch(1);
-            }
-            try { Thread.sleep(5); } catch (InterruptedException e) {}
-            LLResult result = limelight.getLatestResult();
-            if (result != null && result.isValid() && result.getColorResults() != null && !result.getColorResults().isEmpty()) {
-                LLResultTypes.ColorResult target = result.getColorResults().get(0);
-                llTx = target.getTargetXDegrees();
-                llArea = target.getTargetArea();
-                llCentered = Math.abs(llTx) < LIMELIGHT_TOLERANCE;
-
-                telemetry.addData("Horizontal Offset (tx)", String.format("%.2f°", llTx));
-                telemetry.addData("Target Area", String.format("%.2f%%", llArea));
-                telemetry.addData("Centered", llCentered ? "YES ✓" : "NO");
-
-                // Show what correction is being applied
-                double correction = 0;
-                if (llTx > LIMELIGHT_TOLERANCE) {
-                    correction = LIMELIGHT_TURN_POWER;
-                } else if (llTx < -LIMELIGHT_TOLERANCE) {
-                    correction = -LIMELIGHT_TURN_POWER;
-                }
-                telemetry.addData("Turn Correction", String.format("%.2f", correction));
-            }
-        } else {
-            telemetry.addData("No targets above", String.format("%.1f%% area", MIN_TARGET_AREA));
+            double imuHeading = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES);
+            telemetry.addData("Ball Bearing", String.format("%.2f°", smoothedBallBearing));
+            telemetry.addData("IMU Heading", String.format("%.2f°", imuHeading));
+            telemetry.addData("Error", String.format("%.2f°", ballLastError));
+            telemetry.addData("Aligned", Math.abs(ballLastError) < BALL_TOLERANCE_DEG ? "YES ✓" : "NO");
         }
         telemetry.addLine();
 
         telemetry.addLine("=== Sorter ===");
-        telemetry.addData("Normalized Pos", normPos);
-        telemetry.addData("Current Chamber", currentChamber + 1);
-        telemetry.addData("Sorter Moving", sorterMoving);
-        telemetry.addData("Jammed", sorterJammed ? "⚠️ YES (Dpad Up)" : "NO");
-        telemetry.addLine();
-        telemetry.addData("Ch1/Ch2/Ch3", String.format("%s/%s/%s",
-                chamberFull[0] ? "●" : "○",
-                chamberFull[1] ? "●" : "○",
-                chamberFull[2] ? "●" : "○"));
+        telemetry.addData("Pos", normPos);
+        telemetry.addData("Chamber", currentChamber + 1);
+        telemetry.addData("Jammed", sorterJammed ? "⚠️ Dpad Up" : "NO");
+        telemetry.addData("Ch1/2/3", String.format("%s/%s/%s",
+                chamberFull[0] ? "●" : "○", chamberFull[1] ? "●" : "○", chamberFull[2] ? "●" : "○"));
         telemetry.addData("Mode", shootingMode ? "SHOOT" : "INTAKE");
-        telemetry.addData("Color to Shoot", shooterColorDetected);
+        telemetry.addData("Color", shooterColorDetected);
         telemetry.addLine();
 
         telemetry.addData("Target RPM", targetRPM);
         telemetry.addData("Actual RPM", String.format("%.0f", currentRPM));
         telemetry.addData("Ready", rpmReady ? "YES ✓" : "NO");
         telemetry.addLine();
-        telemetry.addData("Turret Tracking", turretTrackingEnabled ? "ON" : "OFF");
+        telemetry.addData("Turret", turretTrackingEnabled ? "ON" : "OFF");
         telemetry.update();
     }
 
+    private double getTimeSeconds() { return System.nanoTime() / 1e9; }
+    private static double clamp(double v, double lo, double hi) { return Math.max(lo, Math.min(hi, v)); }
+    private static double wrapAngle(double angle) {
+        angle %= 360.0;
+        if (angle <= -180.0) angle += 360.0;
+        if (angle > 180.0) angle -= 360.0;
+        return angle;
+    }
     private double applyDeadzone(double v) { return Math.abs(v) < 0.05 ? 0 : v; }
     private double clipLowPower(double p) { return Math.abs(p) < 0.04 ? 0 : p; }
 
