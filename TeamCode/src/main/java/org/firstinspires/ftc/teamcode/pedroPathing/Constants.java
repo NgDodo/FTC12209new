@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode.pedroPathing;
 
+import com.pedropathing.control.FilteredPIDFCoefficients;
+import com.pedropathing.control.PIDFCoefficients;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.follower.FollowerConstants;
 import com.pedropathing.ftc.FollowerBuilder;
@@ -13,13 +15,16 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 
 public class Constants {
     public static FollowerConstants followerConstants = new FollowerConstants()
-            .forwardZeroPowerAcceleration(1) //change value eventually
-            .lateralZeroPowerAcceleration(1) //change value eventually
+          //  .forwardZeroPowerAcceleration(1) //change value eventually
+          //  .lateralZeroPowerAcceleration(1) //change value eventually
+          //  .translationalPIDFCoefficients(new PIDFCoefficients(2,2,2,2))
+           // .headingPIDFCoefficients(new PIDFCoefficients(2, 2,2,2))
+           // .drivePIDFCoefficients(new FilteredPIDFCoefficients(2, 2, 2, 2, 2))
             .mass(22.25);
 
     public static MecanumConstants driveConstants = new MecanumConstants()
-            .xVelocity(1) //change value eventually
-            .yVelocity(1) //change value eventually
+            //.xVelocity(1) //change value eventually
+            //.yVelocity(1) //change value eventually
             .maxPower(1)
             .rightFrontMotorName("fR")
             .rightRearMotorName("bR")
@@ -35,14 +40,14 @@ public class Constants {
             .IMU_HardwareMapName("imu")
             .forwardPodY(8.5)
             .strafePodX(8)
-            .forwardTicksToInches(.0166)
+           // .forwardTicksToInches(.0166)
             //.forwardEncoderDirection(Encoder.REVERSE)
             //.strafeEncoderDirection(Encoder.REVERSE)
-            .strafeTicksToInches(.00127)
+           // .strafeTicksToInches(.00127)
             .IMU_Orientation(
                     new RevHubOrientationOnRobot(
-                            RevHubOrientationOnRobot.LogoFacingDirection.UP,
-                            RevHubOrientationOnRobot.UsbFacingDirection.LEFT
+                            RevHubOrientationOnRobot.LogoFacingDirection.LEFT,
+                            RevHubOrientationOnRobot.UsbFacingDirection.UP
                     )
 
             );
