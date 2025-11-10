@@ -15,16 +15,16 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 
 public class Constants {
     public static FollowerConstants followerConstants = new FollowerConstants()
-          //  .forwardZeroPowerAcceleration(1) //change value eventually
-          //  .lateralZeroPowerAcceleration(1) //change value eventually
+          .forwardZeroPowerAcceleration(-43.5) //change value eventually
+          .lateralZeroPowerAcceleration(-69.4) //change value eventually
           //  .translationalPIDFCoefficients(new PIDFCoefficients(2,2,2,2))
            // .headingPIDFCoefficients(new PIDFCoefficients(2, 2,2,2))
            // .drivePIDFCoefficients(new FilteredPIDFCoefficients(2, 2, 2, 2, 2))
             .mass(22.25);
 
     public static MecanumConstants driveConstants = new MecanumConstants()
-            //.xVelocity(1) //change value eventually
-            //.yVelocity(1) //change value eventually
+            .xVelocity(123) //change value eventually
+            .yVelocity(79) //change value eventually
             .maxPower(1)
             .rightFrontMotorName("fR")
             .rightRearMotorName("bR")
@@ -35,15 +35,13 @@ public class Constants {
             .rightFrontMotorDirection(DcMotorSimple.Direction.FORWARD)
             .rightRearMotorDirection(DcMotorSimple.Direction.FORWARD);
     public static TwoWheelConstants localizerConstants = new TwoWheelConstants()
-            .forwardEncoder_HardwareMapName("m1")
-            .strafeEncoder_HardwareMapName("bL")
+            .forwardEncoder_HardwareMapName("bL")
+            .strafeEncoder_HardwareMapName("m1")
             .IMU_HardwareMapName("imu")
-            .forwardPodY(8.5)
-            .strafePodX(8)
-           // .forwardTicksToInches(.0166)
-            //.forwardEncoderDirection(Encoder.REVERSE)
-            //.strafeEncoderDirection(Encoder.REVERSE)
-           // .strafeTicksToInches(.00127)
+            .forwardPodY(8)
+            .strafePodX(-8.5)
+            .forwardTicksToInches(.0010)
+           .strafeTicksToInches(.0008)
             .IMU_Orientation(
                     new RevHubOrientationOnRobot(
                             RevHubOrientationOnRobot.LogoFacingDirection.LEFT,
