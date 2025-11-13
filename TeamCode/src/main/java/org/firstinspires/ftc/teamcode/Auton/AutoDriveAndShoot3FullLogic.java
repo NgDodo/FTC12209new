@@ -243,7 +243,7 @@ public class AutoDriveAndShoot3FullLogic extends OpMode {
                 break;
 
             case 61:
-                if (timer.getElapsedTimeSeconds() > 0.6) {  // delay (600 ms)
+                if (timer.getElapsedTimeSeconds() > 2) {  // delay (600 ms)
                     simulateY();      // back to intake
                     state = 7;
                 }
