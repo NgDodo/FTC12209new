@@ -343,7 +343,7 @@ public class UnifiedTeleop extends OpMode {
         } else if (gamepad1.left_bumper && !lastLeftBumper) {
             targetRPM = 0;
         } else if (gamepad1.dpad_left && !lastDpadLeft) {
-            targetRPM = -2000;
+            targetRPM = -4000;
         }
         lastRightBumper = gamepad1.right_bumper;
         lastLeftBumper = gamepad1.left_bumper;
