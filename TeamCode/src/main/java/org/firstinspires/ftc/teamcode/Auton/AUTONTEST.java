@@ -18,17 +18,37 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "Auto Drive + Shoot 3 (Full TeleOp Logic)", group = "Tests")
-public class AutoDriveAndShoot3FullLogic extends OpMode {
+@Autonomous(name = "Auto TEST", group = "Tests")
+public class AUTONTEST extends OpMode {
 
     private Follower follower;
     private Timer timer = new Timer();
     private int state = 0;
 
+    // ========================================
+    // === TUNABLE PARAMETERS ===
+    // ========================================
+
+    // RPM Settings
+    private static final double SHOOTING_RPM = 3000;  // ← DECREASE to reduce overshoot, INCREASE for more power
+    private static final double TICKS_PER_REV = 28.0;
+    private static final double RPM_TOLERANCE = 100.0; // Increased tolerance for auto
+
+    // Timing Parameters (all in seconds)
+    private static final double SPINUP_TIME = 2.0;    // ← Time to wait for flywheel to reach RPM
+    private static final double SHOOT_DURATION = 1.0; // ← How long shooter mechanism runs (s2 down + s3 spinning)
+    private static final double SERVO_RETRACT_DELAY = 0.6; // ← Wait after stopping shooter before rotating sorter
+    private static final double FINAL_RETRACT_DELAY = 1.0; // ← Wait before switching back to intake
+
+    // Rotation Settings
+    private static final double ROTATION_ANGLE = -45.0; // ← Rotation angle in degrees (negative = clockwise, positive = counterclockwise)
+
     // === Drivetrain test path ===
     private final Pose startPose = new Pose(0, 0, Math.toRadians(0));
-    private final Pose pose1 = new Pose(-90, 0, Math.toRadians(0)); // back 48 inches
+    private final Pose pose1 = new Pose(-90, 0, Math.toRadians(0)); // back 45 inches
+    private Pose pose2; // Will be set in init() using ROTATION_ANGLE
     private Path backwardPath;
+    private Path rotatePath;
 
     // === Mechanisms ===
     private DcMotorEx m3; // flywheel
@@ -81,32 +101,21 @@ public class AutoDriveAndShoot3FullLogic extends OpMode {
     private boolean emptyDetectionActive = false;
     private static final long EMPTY_DETECT_TIME_MS = 500;
 
-    // === Shooter settings (EXACT from TeleOp) ===
-    private static final double TICKS_PER_REV = 28.0;
-    private static final double RPM_TOLERANCE = 100.0; // Increased tolerance for auto
-
-    // ========================================
-    // === TUNABLE PARAMETERS ===
-    // ========================================
-
-    // RPM Settings
-    private static final double SHOOTING_RPM = 3000;  // ← DECREASE to reduce overshoot, INCREASE for more power
-
-    // Timing Parameters (all in seconds)
-    private static final double SPINUP_TIME = 2;    // ← Time to wait for flywheel to reach RPM
-    private static final double SHOOT_DURATION = 1; // ← How long shooter mechanism runs (s2 down + s3 spinning)
-    private static final double SERVO_RETRACT_DELAY = 0.6; // ← Wait after stopping shooter before rotating sorter
-    private static final double FINAL_RETRACT_DELAY = 1.0; // ← Wait before switching back to intake
-
     @Override
     public void init() {
         // === Initialize Pedro follower ===
         follower = Constants.createFollower(hardwareMap);
         follower.setStartingPose(startPose);
 
-        // === Build simple backward path ===
+        // === Build paths using tunable constants ===
+        pose2 = new Pose(-90, 0, Math.toRadians(ROTATION_ANGLE)); // Use tunable rotation angle
+
         backwardPath = new Path(new BezierLine(startPose, pose1));
-        backwardPath.setLinearHeadingInterpolation(startPose.getHeading(), pose1.getHeading());
+        backwardPath.setConstantHeadingInterpolation(startPose.getHeading());
+
+        // === Build rotation path (uses ROTATION_ANGLE constant) ===
+        rotatePath = new Path(new BezierLine(pose1, pose2));
+        rotatePath.setLinearHeadingInterpolation(pose1.getHeading(), pose2.getHeading());
 
         // === Init hardware (same as TeleOp) ===
         m1 = hardwareMap.get(DcMotor.class, "m1");
@@ -266,11 +275,28 @@ public class AutoDriveAndShoot3FullLogic extends OpMode {
                 // Wait before switching sorter back to intake position
                 if (timer.getElapsedTimeSeconds() > FINAL_RETRACT_DELAY) {
                     simulateY();      // back to intake
+                    timer.resetTimer();
                     state = 7;
                 }
                 break;
 
             case 7:
+                // Wait for sorter to finish moving back to intake
+                if (!sorterMoving || timer.getElapsedTimeSeconds() > 2.0) {
+                    follower.followPath(rotatePath); // Start 45-degree rotation
+                    timer.resetTimer();
+                    state = 8;
+                }
+                break;
+
+            case 8:
+                // Wait for rotation to complete
+                if (!follower.isBusy()) {
+                    state = 9; // done
+                }
+                break;
+
+            case 9:
                 // done
                 break;
         }
@@ -278,6 +304,8 @@ public class AutoDriveAndShoot3FullLogic extends OpMode {
         telemetry.addData("State", state);
         telemetry.addData("Target RPM", SHOOTING_RPM);
         telemetry.addData("RPM", (m3.getVelocity() / TICKS_PER_REV) * 60.0);
+        telemetry.addData("Rotation Angle", ROTATION_ANGLE);
+        telemetry.addData("Current Heading", Math.toDegrees(follower.getPose().getHeading()));
         telemetry.addData("Sorter Target", sorterTargetPosition);
         telemetry.addData("Sorter Pos", normalize(m2.getCurrentPosition()));
         telemetry.addData("Sorter Moving", sorterMoving);
