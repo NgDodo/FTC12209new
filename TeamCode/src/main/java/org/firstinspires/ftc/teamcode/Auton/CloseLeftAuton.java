@@ -18,8 +18,8 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "Close Right Auton", group = "Tests")
-public class AutoDriveAndShoot3FullLogic extends OpMode {
+@Autonomous(name = "Close Left Auton", group = "Tests")
+public class CloseLeftAuton extends OpMode {
 
     private Follower follower;
     private Timer timer = new Timer();
@@ -28,7 +28,7 @@ public class AutoDriveAndShoot3FullLogic extends OpMode {
     // === Drivetrain test path ===
     private final Pose startPose = new Pose(0, 0, Math.toRadians(0));
     private final Pose pose1 = new Pose(-60, 0, Math.toRadians(0)); // back 30 inches
-    private final Pose pose2 = new Pose(-60, -24, Math.toRadians(0)); // strafe right 48 inches
+    private final Pose pose2 = new Pose(-60, 24, Math.toRadians(0)); // strafe right 48 inches
     private Path backwardPath;
     private Path strafePath;
 

@@ -18,7 +18,7 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "Auto TEST", group = "Tests")
+@Autonomous(name = "AUTONTEST", group = "Tests")
 public class AUTONTEST extends OpMode {
 
     private Follower follower;
@@ -48,7 +48,7 @@ public class AUTONTEST extends OpMode {
     private final Pose pose1 = new Pose(-90, 0, Math.toRadians(0)); // back 45 inches
     private Pose pose2; // Will be set in init() using ROTATION_ANGLE
     private Path backwardPath;
-    private Path rotatePath;
+    private com.pedropathing.paths.PathChain rotatePath;
 
     // === Mechanisms ===
     private DcMotorEx m3; // flywheel
@@ -114,8 +114,11 @@ public class AUTONTEST extends OpMode {
         backwardPath.setConstantHeadingInterpolation(startPose.getHeading());
 
         // === Build rotation path (uses ROTATION_ANGLE constant) ===
-        rotatePath = new Path(new BezierLine(pose1, pose2));
-        rotatePath.setLinearHeadingInterpolation(pose1.getHeading(), pose2.getHeading());
+        // For a pure rotation, we keep the same X,Y but change heading
+        rotatePath = follower.pathBuilder()
+                .addPath(new BezierLine(pose1, pose2))
+                .setLinearHeadingInterpolation(pose1.getHeading(), pose2.getHeading())
+                .build();
 
         // === Init hardware (same as TeleOp) ===
         m1 = hardwareMap.get(DcMotor.class, "m1");
@@ -283,7 +286,9 @@ public class AUTONTEST extends OpMode {
             case 7:
                 // Wait for sorter to finish moving back to intake
                 if (!sorterMoving || timer.getElapsedTimeSeconds() > 2.0) {
-                    follower.followPath(rotatePath); // Start 45-degree rotation
+                    // Directly set target pose for rotation
+                    follower.setMaxPower(0.5); // Reduce power for controlled rotation
+                    follower.followPath(rotatePath, true); // holdEnd = true to maintain final pose
                     timer.resetTimer();
                     state = 8;
                 }
@@ -291,7 +296,11 @@ public class AUTONTEST extends OpMode {
 
             case 8:
                 // Wait for rotation to complete
-                if (!follower.isBusy()) {
+                // Check if heading is close to target (within 5 degrees)
+                double headingError = Math.abs(Math.toDegrees(follower.getPose().getHeading()) - ROTATION_ANGLE);
+                if (headingError < 5.0 || timer.getElapsedTimeSeconds() > 5.0) {
+                    follower.setMaxPower(1.0); // Reset power
+                    follower.breakFollowing(); // Stop following
                     state = 9; // done
                 }
                 break;
@@ -305,7 +314,10 @@ public class AUTONTEST extends OpMode {
         telemetry.addData("Target RPM", SHOOTING_RPM);
         telemetry.addData("RPM", (m3.getVelocity() / TICKS_PER_REV) * 60.0);
         telemetry.addData("Rotation Angle", ROTATION_ANGLE);
-        telemetry.addData("Current Heading", Math.toDegrees(follower.getPose().getHeading()));
+        telemetry.addData("Current Heading", String.format("%.2f°", Math.toDegrees(follower.getPose().getHeading())));
+        telemetry.addData("Target Heading (pose2)", pose2 != null ? String.format("%.2f°", Math.toDegrees(pose2.getHeading())) : "null");
+        telemetry.addData("Heading Error", state == 8 ? String.format("%.2f°", Math.abs(Math.toDegrees(follower.getPose().getHeading()) - ROTATION_ANGLE)) : "N/A");
+        telemetry.addData("Follower Busy", follower.isBusy());
         telemetry.addData("Sorter Target", sorterTargetPosition);
         telemetry.addData("Sorter Pos", normalize(m2.getCurrentPosition()));
         telemetry.addData("Sorter Moving", sorterMoving);

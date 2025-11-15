@@ -18,8 +18,8 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "Close Right Auton", group = "Tests")
-public class AutoDriveAndShoot3FullLogic extends OpMode {
+@Autonomous(name = "FarAuton", group = "Tests")
+public class FarAuton extends OpMode {
 
     private Follower follower;
     private Timer timer = new Timer();
@@ -27,10 +27,12 @@ public class AutoDriveAndShoot3FullLogic extends OpMode {
 
     // === Drivetrain test path ===
     private final Pose startPose = new Pose(0, 0, Math.toRadians(0));
-    private final Pose pose1 = new Pose(-60, 0, Math.toRadians(0)); // back 30 inches
-    private final Pose pose2 = new Pose(-60, -24, Math.toRadians(0)); // strafe right 48 inches
+    private final Pose pose1 = new Pose(0.25, 0, Math.toRadians(0)); // forward 0.25 inches
+    private final Pose pose2 = new Pose(24, 0, Math.toRadians(0)); // strafe right 24 inches
+    private final Pose pose3 = new Pose(18, 0, Math.toRadians(0));
     private Path backwardPath;
     private Path strafePath;
+    private Path returnPath;
 
     // === Mechanisms ===
     private DcMotorEx m3; // flywheel
@@ -92,10 +94,10 @@ public class AutoDriveAndShoot3FullLogic extends OpMode {
     // ========================================
 
     // RPM Settings
-    private static final double SHOOTING_RPM = 3100;  // ← DECREASE to reduce overshoot, INCREASE for more power
+    private static final double SHOOTING_RPM = 3775;  // ← DECREASE to reduce overshoot, INCREASE for more power
 
     // Timing Parameters (all in seconds)
-    private static final double SPINUP_TIME = 2.0;    // ← Time to wait for flywheel to reach RPM
+    private static final double SPINUP_TIME = 3.0;    // ← Time to wait for flywheel to reach RPM
     private static final double SHOOT_DURATION = 1.0; // ← How long shooter mechanism runs (s2 down + s3 spinning)
     private static final double SERVO_RETRACT_DELAY = 0.6; // ← Wait after stopping shooter before rotating sorter
     private static final double FINAL_RETRACT_DELAY = 1.0; // ← Wait before switching back to intake
@@ -113,9 +115,13 @@ public class AutoDriveAndShoot3FullLogic extends OpMode {
         backwardPath = new Path(new BezierLine(startPose, pose1));
         backwardPath.setConstantHeadingInterpolation(startPose.getHeading());
 
-        // Strafe path - lateral movement
+        // Strafe path - lateral movement to pose2
         strafePath = new Path(new BezierLine(pose1, pose2));
         strafePath.setConstantHeadingInterpolation(pose1.getHeading());
+
+        // Return path - back to pose1
+        returnPath = new Path(new BezierLine(pose2, pose3));
+        returnPath.setConstantHeadingInterpolation(pose2.getHeading());
 
         // === Init hardware (same as TeleOp) ===
         m1 = hardwareMap.get(DcMotor.class, "m1");
@@ -160,7 +166,7 @@ public class AutoDriveAndShoot3FullLogic extends OpMode {
         chamberFull[1] = true;
         chamberFull[2] = true;
 
-        telemetry.addLine("AutoDriveAndShoot3 (Full TeleOp Logic) Initialized");
+        telemetry.addLine("FarAuton (Full TeleOp Logic) Initialized");
         telemetry.update();
     }
 
@@ -283,7 +289,7 @@ public class AutoDriveAndShoot3FullLogic extends OpMode {
             case 7:
                 // Wait for sorter to finish moving back to intake
                 if (!sorterMoving || timer.getElapsedTimeSeconds() > 2.0) {
-                    follower.followPath(strafePath); // Start lateral strafe
+                    follower.followPath(strafePath); // Start lateral strafe to pose2
                     timer.resetTimer();
                     state = 8;
                 }
@@ -292,11 +298,20 @@ public class AutoDriveAndShoot3FullLogic extends OpMode {
             case 8:
                 // Wait for strafe to complete
                 if (!follower.isBusy()) {
-                    state = 9; // done
+                    follower.followPath(returnPath); // Return to pose1
+                    timer.resetTimer();
+                    state = 9;
                 }
                 break;
 
             case 9:
+                // Wait for return path to complete
+                if (!follower.isBusy()) {
+                    state = 10; // done
+                }
+                break;
+
+            case 10:
                 // done
                 break;
         }
