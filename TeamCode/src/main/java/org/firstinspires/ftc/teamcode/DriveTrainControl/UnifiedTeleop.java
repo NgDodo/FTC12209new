@@ -183,7 +183,12 @@ public class UnifiedTeleop extends OpMode {
         // === Flywheel motor setup ===
         m3.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         m3.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        m3.setVelocityPIDFCoefficients(8.0, 0.5, 0.0, 12.5);
+        m3.setDirection(DcMotorSimple.Direction.REVERSE);
+
+        // === Intake motor setup ===
+        m1.setDirection(DcMotorSimple.Direction.REVERSE);
+        m2.setDirection(DcMotorSimple.Direction.REVERSE);
+
 
         // === Color Sensors ===
         intakeColor  = hardwareMap.get(RevColorSensorV3.class, "intakeColor");
