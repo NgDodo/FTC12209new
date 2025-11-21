@@ -187,8 +187,6 @@ public class UnifiedTeleop extends OpMode {
 
         // === Intake motor setup ===
         m1.setDirection(DcMotorSimple.Direction.REVERSE);
-        m2.setDirection(DcMotorSimple.Direction.REVERSE);
-
 
         // === Color Sensors ===
         intakeColor  = hardwareMap.get(RevColorSensorV3.class, "intakeColor");
