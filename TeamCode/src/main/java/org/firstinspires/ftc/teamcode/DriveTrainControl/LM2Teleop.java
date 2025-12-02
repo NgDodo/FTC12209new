@@ -84,10 +84,10 @@ public class LM2Teleop extends OpMode {
     private ElapsedTime sorterTimer = new ElapsedTime();
     private ElapsedTime sorterSettleTimer = new ElapsedTime();
     private boolean sorterSettling = false;
-    private static final int COARSE_TOL = 600;
-    private static final int FINE_TOL = 180;
-    private static final int PERFECT_TOL = 160;
-    private static final double MAX_POWER = 1.0;
+    private static final int COARSE_TOL = 1000;
+    private static final int FINE_TOL = 100;
+    private static final int PERFECT_TOL = 80;
+    private static final double MAX_POWER = 0.55;
     private static final double MIN_POWER = 0.08;
     private static final long SORTER_TIMEOUT_MS = 2000;
     private static final long SETTLE_MS = 100;
@@ -95,8 +95,8 @@ public class LM2Teleop extends OpMode {
     // === Jam detection ===
     private int lastSorterPosition = 0;
     private long lastSorterMoveTime = 0;
-    private static final long JAM_CHECK_INTERVAL_MS = 200;
-    private static final int MIN_MOVEMENT_TICKS = 25;
+    private static final long JAM_CHECK_INTERVAL_MS = 000;
+    private static final int MIN_MOVEMENT_TICKS = 0;
     private boolean sorterJammed = false;
 
     // === Timed color detection ===
@@ -110,7 +110,7 @@ public class LM2Teleop extends OpMode {
     private static final long EMPTY_DETECT_TIME_MS = 500;
 
     // === Shooter presets ===
-    private final int[] rpmPresets = {3200, 3500, 4000};
+    private final int[] rpmPresets = {2800, 3100, 3500};
     private int presetIndex = -1;
     private double targetRPM = 0;
     private boolean lastRightBumper = false;
@@ -144,7 +144,7 @@ public class LM2Teleop extends OpMode {
         s2 = hardwareMap.get(Servo.class, "s2");
         s3 = hardwareMap.get(CRServo.class, "s3");
         s3.setDirection(DcMotorSimple.Direction.REVERSE);
-        s2.setPosition(1.0);
+        s2.setPosition(.73);
 
         for (DcMotor motor : new DcMotor[]{m1, m2, m3, m0}) {
             motor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
@@ -283,7 +283,7 @@ public class LM2Teleop extends OpMode {
             s2.setPosition(0);
             s3.setPower(1.0);
         } else {
-            s2.setPosition(1);
+            s2.setPosition(.73);
             s3.setPower(0.0);
         }
 
