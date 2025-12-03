@@ -10,7 +10,6 @@ import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
-import com.qualcomm.robotcore.hardware.DigitalChannel;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
@@ -34,12 +33,11 @@ public class LM2Teleop extends OpMode {
     CRServo s3;
     Servo s2;
 
-    // === Color Sensors & LEDs ===
+    // === Color Sensors & RGB LEDs ===
     private RevColorSensorV3 intakeColor;
     private RevColorSensorV3 shooterColor;
-    private DigitalChannel LED_Red;
-    private DigitalChannel LED_Green;
-    private DigitalChannel LED_Blue;
+    private Servo led1; // Ball color indicator
+    private Servo led2; // RPM ready indicator
 
     // === Vision & IMU ===
     private VisionPortal visionPortal;
@@ -110,7 +108,7 @@ public class LM2Teleop extends OpMode {
     private static final long EMPTY_DETECT_TIME_MS = 500;
 
     // === Shooter presets ===
-    private final int[] rpmPresets = {2800, 3100, 3500};
+    private final int[] rpmPresets = {3000, 3500};
     private int presetIndex = -1;
     private double targetRPM = 0;
     private boolean lastRightBumper = false;
@@ -118,7 +116,7 @@ public class LM2Teleop extends OpMode {
     private boolean lastDpadLeft = false;
 
     private static final double TICKS_PER_REV = 28.0;
-    private static final double RPM_TOLERANCE = 50.0;
+    private static final double RPM_TOLERANCE =100.0;
 
     @Override
     public void init() {
@@ -165,16 +163,11 @@ public class LM2Teleop extends OpMode {
         intakeColor  = hardwareMap.get(RevColorSensorV3.class, "intakeColor");
         shooterColor = hardwareMap.get(RevColorSensorV3.class, "shooterColor");
 
-        // === LEDs ===
-        LED_Red   = hardwareMap.get(DigitalChannel.class, "LED1");
-        LED_Green = hardwareMap.get(DigitalChannel.class, "LED2");
-        LED_Blue  = hardwareMap.get(DigitalChannel.class, "LED3");
-        LED_Red.setMode(DigitalChannel.Mode.OUTPUT);
-        LED_Green.setMode(DigitalChannel.Mode.OUTPUT);
-        LED_Blue.setMode(DigitalChannel.Mode.OUTPUT);
-        LED_Red.setState(false);
-        LED_Green.setState(false);
-        LED_Blue.setState(false);
+        // === RGB LEDs ===
+        led1 = hardwareMap.get(Servo.class, "led1");
+        led2 = hardwareMap.get(Servo.class, "led2");
+        led1.setPosition(1.0); // Start with white
+        led2.setPosition(1.0); // Start with white
 
         // === IMU Setup ===
         imu = hardwareMap.get(IMU.class, "imu");
@@ -200,7 +193,7 @@ public class LM2Teleop extends OpMode {
 
         tagLastTime = getTimeSeconds();
 
-        telemetry.addLine("Unified TeleOp Initialized");
+        telemetry.addLine("LM2 TeleOp Initialized");
         telemetry.addLine("B Button: AprilTag Body Tracking");
         telemetry.addLine("Dpad Up: Clear Sorter Jam");
         telemetry.update();
@@ -362,12 +355,16 @@ public class LM2Teleop extends OpMode {
 
     private void updateRPMLED() {
         if (targetRPM == 0) {
-            LED_Red.setState(false);
+            led2.setPosition(0); // Green when not spinning
             return;
         }
         double currentRPM = (m3.getVelocity() / TICKS_PER_REV) * 60.0;
         double rpmError = Math.abs(targetRPM - currentRPM);
-        LED_Red.setState(rpmError <= RPM_TOLERANCE);
+        if (rpmError <= RPM_TOLERANCE) {
+            led2.setPosition(0.3); // Red when RPM is ready
+        } else {
+            led2.setPosition(0); // Green when spinning up
+        }
     }
 
     private void updateSorterMovement() {
@@ -446,14 +443,11 @@ public class LM2Teleop extends OpMode {
 
     private void updateColorLEDs(String color) {
         if (color.equals("GREEN")) {
-            LED_Green.setState(true);
-            LED_Blue.setState(false);
+            led1.setPosition(0.5); // Green
         } else if (color.equals("PURPLE")) {
-            LED_Green.setState(false);
-            LED_Blue.setState(true);
+            led1.setPosition(0.722); // Purple
         } else {
-            LED_Green.setState(false);
-            LED_Blue.setState(false);
+            led1.setPosition(0); // Default to green when no ball
         }
     }
 
@@ -609,8 +603,7 @@ public class LM2Teleop extends OpMode {
 
         // === Controls Summary ===
         telemetry.addLine("=== Controls ===");
-        telemetry.addLine("RT: Ball Assist (adds to rotation)");
-        telemetry.addLine("B: Tag Track (locks rotation)");
+        telemetry.addLine("B: Tag Track");
         telemetry.addLine("Y: Mode | DpadRight: Switch Chamber");
         telemetry.addLine("A: Shoot | DpadUp: Clear Jam");
         telemetry.addLine("RB: RPM+ | LB: RPM Off | DpadLeft: Reverse");
