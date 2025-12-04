@@ -105,7 +105,7 @@ public class LM2Teleop extends OpMode {
     // === Empty chamber detection ===
     private long emptyStartTime = 0;
     private boolean emptyDetectionActive = false;
-    private static final long EMPTY_DETECT_TIME_MS = 500;
+    private static final long EMPTY_DETECT_TIME_MS = 100;
 
     // === Shooter presets ===
     private final int[] rpmPresets = {3000, 3500};
@@ -216,6 +216,12 @@ public class LM2Teleop extends OpMode {
         double y = applyDeadzone(-gamepad1.left_stick_y);
         double x = applyDeadzone(gamepad1.left_stick_x);
         double rx = applyDeadzone(gamepad1.right_stick_x);
+
+        // === FIXED: Apply AprilTag correction to rotation ===
+        if (aprilTagTrackingEnabled) {
+            double tagCorrection = getAprilTagBodyCorrection();
+            rx -= tagCorrection;
+        }
 
         double fl = y + x + rx, bl = y - x + rx, fr = y - x - rx, br = y + x - rx;
         double max = Math.max(1.0, Math.max(Math.abs(fl), Math.max(Math.abs(bl),
@@ -464,27 +470,53 @@ public class LM2Teleop extends OpMode {
     }
 
     private void autoIntakeColorCheck() {
-        if (allChambersFull() || sorterMoving) return;
+        // === FIXED: Remove allChambersFull check and fix chamber logic ===
+        if (sorterMoving) return;
+
         String detected = detectIntakeColor();
         if (detected.equals("NONE")) {
             colorActive = false;
             colorStartTime = 0;
             return;
         }
+
         if (!colorActive) {
             colorActive = true;
             colorStartTime = System.currentTimeMillis();
         }
+
         if (System.currentTimeMillis() - colorStartTime >= DETECT_TIME_MS) {
             if (!chamberFull[currentChamber]) {
                 chamberFull[currentChamber] = true;
-                currentChamber = nextChamber(currentChamber);
-                int target = getChamberPosition(currentChamber, false);
-                startSorterMove(target);
+
+                // === FIXED: Only move to next chamber if not all full ===
+                if (!allChambersFull()) {
+                    // Find next empty chamber
+                    int nextEmpty = findNextEmptyChamber(currentChamber);
+                    if (nextEmpty != -1) {
+                        currentChamber = nextEmpty;
+                        int target = getChamberPosition(currentChamber, false);
+                        startSorterMove(target);
+                    }
+                }
             }
             colorActive = false;
             colorStartTime = 0;
         }
+    }
+
+    // === FIXED: Add helper method to find next empty chamber ===
+    private int findNextEmptyChamber(int startChamber) {
+        // Try next chamber first
+        int next = nextChamber(startChamber);
+        if (!chamberFull[next]) return next;
+
+        // Try the one after that
+        next = nextChamber(next);
+        if (!chamberFull[next]) return next;
+
+        // All full
+        return -1;
     }
 
     private void checkChamberEmpty() {
