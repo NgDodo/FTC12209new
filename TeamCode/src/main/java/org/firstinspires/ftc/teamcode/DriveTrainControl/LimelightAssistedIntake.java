@@ -38,9 +38,6 @@ public class LimelightAssistedIntake extends OpMode {
     // === Color Sensors & LEDs ===
     private RevColorSensorV3 intakeColor;
     private RevColorSensorV3 shooterColor;
-    private DigitalChannel LED_Red;
-    private DigitalChannel LED_Green;
-    private DigitalChannel LED_Blue;
 
     // === Vision & AprilTag ===
     private VisionPortal visionPortal;
@@ -182,17 +179,6 @@ public class LimelightAssistedIntake extends OpMode {
         intakeColor  = hardwareMap.get(RevColorSensorV3.class, "intakeColor");
         shooterColor = hardwareMap.get(RevColorSensorV3.class, "shooterColor");
 
-        // === LEDs ===
-        LED_Red   = hardwareMap.get(DigitalChannel.class, "LED1");
-        LED_Green = hardwareMap.get(DigitalChannel.class, "LED2");
-        LED_Blue  = hardwareMap.get(DigitalChannel.class, "LED3");
-        LED_Red.setMode(DigitalChannel.Mode.OUTPUT);
-        LED_Green.setMode(DigitalChannel.Mode.OUTPUT);
-        LED_Blue.setMode(DigitalChannel.Mode.OUTPUT);
-        LED_Red.setState(false);
-        LED_Green.setState(false);
-        LED_Blue.setState(false);
-
         // === IMU Setup ===
         imu = hardwareMap.get(IMU.class, "imu");
         IMU.Parameters imuParams = new IMU.Parameters(
@@ -291,7 +277,6 @@ public class LimelightAssistedIntake extends OpMode {
         }
 
         String shooterColorDetected = detectShooterColor();
-        updateColorLEDs(shooterColorDetected);
 
         // === Intake ===
         if (!shootingMode) {
@@ -324,8 +309,6 @@ public class LimelightAssistedIntake extends OpMode {
 
         double targetTicksPerSec = (targetRPM / 60.0) * TICKS_PER_REV;
         m3.setVelocity(targetTicksPerSec);
-
-        updateRPMLED();
 
         // === Turret Tracking ===
         if (gamepad1.b && !lastTurretToggle) {
@@ -481,16 +464,6 @@ public class LimelightAssistedIntake extends OpMode {
         }
     }
 
-    private void updateRPMLED() {
-        if (targetRPM == 0) {
-            LED_Red.setState(false);
-            return;
-        }
-        double currentRPM = (m3.getVelocity() / TICKS_PER_REV) * 60.0;
-        double rpmError = Math.abs(targetRPM - currentRPM);
-        LED_Red.setState(rpmError <= RPM_TOLERANCE);
-    }
-
     private void updateSorterMovement() {
         if (!sorterMoving) return;
 
@@ -563,19 +536,6 @@ public class LimelightAssistedIntake extends OpMode {
         sorterTimer.reset();
         lastSorterPosition = normalize(m2.getCurrentPosition());
         lastSorterMoveTime = System.currentTimeMillis();
-    }
-
-    private void updateColorLEDs(String color) {
-        if (color.equals("GREEN")) {
-            LED_Green.setState(true);
-            LED_Blue.setState(false);
-        } else if (color.equals("PURPLE")) {
-            LED_Green.setState(false);
-            LED_Blue.setState(true);
-        } else {
-            LED_Green.setState(false);
-            LED_Blue.setState(false);
-        }
     }
 
     private int getChamberPosition(int chamber, boolean shooting) {

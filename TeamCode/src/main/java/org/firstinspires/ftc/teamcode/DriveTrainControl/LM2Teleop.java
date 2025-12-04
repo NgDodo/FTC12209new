@@ -90,6 +90,9 @@ public class LM2Teleop extends OpMode {
     private static final long SORTER_TIMEOUT_MS = 2000;
     private static final long SETTLE_MS = 100;
 
+    private boolean lastXButton = false;
+    private boolean distanceBasedRPM = false;
+
     // === Jam detection ===
     private int lastSorterPosition = 0;
     private long lastSorterMoveTime = 0;
@@ -285,11 +288,30 @@ public class LM2Teleop extends OpMode {
             s2.setPosition(.73);
             s3.setPower(0.0);
         }
-
         // === Flywheel RPM ===
+        // Toggle distance-based RPM mode with X button
+        boolean xPressed = gamepad1.x;
+        if (xPressed && !lastXButton) {
+            distanceBasedRPM = !distanceBasedRPM;
+        }
+        lastXButton = xPressed;
+
         if (gamepad1.right_bumper && !lastRightBumper) {
-            presetIndex = (presetIndex + 1) % rpmPresets.length;
-            targetRPM = rpmPresets[presetIndex];
+            if (distanceBasedRPM) {
+                // Distance-based mode: check AprilTag distance
+                List<AprilTagDetection> detections = aprilTag.getDetections();
+                if (!detections.isEmpty() && detections.get(0).ftcPose != null) {
+                    double distance = detections.get(0).ftcPose.range;
+                    targetRPM = (distance < 110.0) ? 3000 : 3500;
+                } else {
+                    // Default to 3000 if no tag visible
+                    targetRPM = 3000;
+                }
+            } else {
+                // Manual cycle mode
+                presetIndex = (presetIndex + 1) % rpmPresets.length;
+                targetRPM = rpmPresets[presetIndex];
+            }
         } else if (gamepad1.left_bumper && !lastLeftBumper) {
             targetRPM = 0;
         } else if (gamepad1.dpad_left && !lastDpadLeft) {
@@ -305,6 +327,7 @@ public class LM2Teleop extends OpMode {
         updateRPMLED();
         updateTelemetry(normPos, shooterColorDetected);
     }
+
 
     private double getAprilTagBodyCorrection() {
         List<AprilTagDetection> detections = aprilTag.getDetections();
