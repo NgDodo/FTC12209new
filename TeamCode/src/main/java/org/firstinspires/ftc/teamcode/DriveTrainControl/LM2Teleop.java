@@ -111,7 +111,7 @@ public class LM2Teleop extends OpMode {
     private static final long EMPTY_DETECT_TIME_MS = 100;
 
     // === Shooter presets ===
-    private final int[] rpmPresets = {3000, 3500};
+    private final int[] rpmPresets = {2500, 3000};
     private int presetIndex = -1;
     private double targetRPM = 0;
     private boolean lastRightBumper = false;
@@ -145,7 +145,7 @@ public class LM2Teleop extends OpMode {
         s2 = hardwareMap.get(Servo.class, "s2");
         s3 = hardwareMap.get(CRServo.class, "s3");
         s3.setDirection(DcMotorSimple.Direction.REVERSE);
-        s2.setPosition(.73);
+        s2.setPosition(.68);
 
         for (DcMotor motor : new DcMotor[]{m1, m2, m3, m0}) {
             motor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
@@ -285,7 +285,7 @@ public class LM2Teleop extends OpMode {
             s2.setPosition(0);
             s3.setPower(1.0);
         } else {
-            s2.setPosition(.73);
+            s2.setPosition(.68);
             s3.setPower(0.0);
         }
         // === Flywheel RPM ===
@@ -302,10 +302,10 @@ public class LM2Teleop extends OpMode {
                 List<AprilTagDetection> detections = aprilTag.getDetections();
                 if (!detections.isEmpty() && detections.get(0).ftcPose != null) {
                     double distance = detections.get(0).ftcPose.range;
-                    targetRPM = (distance < 110.0) ? 3000 : 3500;
+                    targetRPM = (distance < 110.0) ? 2500 : 3000;
                 } else {
                     // Default to 3000 if no tag visible
-                    targetRPM = 3000;
+                    targetRPM = 2500;
                 }
             } else {
                 // Manual cycle mode
