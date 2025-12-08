@@ -40,14 +40,10 @@ public class TestConstants {
             .leftRearMotorDirection(DcMotorSimple.Direction.REVERSE)
             .rightFrontMotorDirection(DcMotorSimple.Direction.FORWARD)
             .rightRearMotorDirection(DcMotorSimple.Direction.FORWARD);
-    public static PinpointConstants localizerConstants = new PinpointConstants()
-            .forwardPodY(-5)
-            .strafePodX(0.5)
-            .distanceUnit(DistanceUnit.INCH)
-            .hardwareMapName("pinpoint")
-            .encoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD)
-            .forwardEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD)
-            .strafeEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD);
+    public static OTOSConstants localizerConstants = new OTOSConstants()
+            .hardwareMapName("otos")
+            .linearUnit(DistanceUnit.INCH)
+            .angleUnit(AngleUnit.RADIANS);
     //.linearScalar(multiplier)
     //.linearScalar(multiplier)
     //.angularScalar(multiplier)
@@ -55,7 +51,7 @@ public class TestConstants {
     public static Follower createFollower(HardwareMap hardwareMap) {
         return new FollowerBuilder(followerConstants, hardwareMap)
                 .pathConstraints(pathConstraints)
-                .pinpointLocalizer(localizerConstants)
+                .OTOSLocalizer(localizerConstants)
                 .mecanumDrivetrain(driveConstants)
                 .build();
     }
