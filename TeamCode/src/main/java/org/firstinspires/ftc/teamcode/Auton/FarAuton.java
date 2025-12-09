@@ -94,7 +94,7 @@ public class FarAuton extends OpMode {
     // ========================================
 
     // RPM Settings
-    private static final double SHOOTING_RPM = 3775;  // ← DECREASE to reduce overshoot, INCREASE for more power
+    private static final double SHOOTING_RPM = 2500;  // ← DECREASE to reduce overshoot, INCREASE for more power
 
     // Timing Parameters (all in seconds)
     private static final double SPINUP_TIME = 3.0;    // ← Time to wait for flywheel to reach RPM
@@ -149,17 +149,6 @@ public class FarAuton extends OpMode {
         // === Color Sensors ===
         intakeColor = hardwareMap.get(RevColorSensorV3.class, "intakeColor");
         shooterColor = hardwareMap.get(RevColorSensorV3.class, "shooterColor");
-
-        // === LEDs ===
-        LED_Red = hardwareMap.get(DigitalChannel.class, "LED1");
-        LED_Green = hardwareMap.get(DigitalChannel.class, "LED2");
-        LED_Blue = hardwareMap.get(DigitalChannel.class, "LED3");
-        LED_Red.setMode(DigitalChannel.Mode.OUTPUT);
-        LED_Green.setMode(DigitalChannel.Mode.OUTPUT);
-        LED_Blue.setMode(DigitalChannel.Mode.OUTPUT);
-        LED_Red.setState(false);
-        LED_Green.setState(false);
-        LED_Blue.setState(false);
 
         // === Assume all chambers start full ===
         chamberFull[0] = true;

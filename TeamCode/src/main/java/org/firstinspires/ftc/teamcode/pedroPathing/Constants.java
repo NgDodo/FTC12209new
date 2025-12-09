@@ -45,9 +45,6 @@ public class Constants {
             .encoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD)
             .forwardEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD)
             .strafeEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD);
-    //.linearScalar(multiplier)
-    //.linearScalar(multiplier)
-    //.angularScalar(multiplier)
     public static PathConstraints pathConstraints = new PathConstraints(0.99, 100, 1, 1);
     public static Follower createFollower(HardwareMap hardwareMap) {
         return new FollowerBuilder(followerConstants, hardwareMap)

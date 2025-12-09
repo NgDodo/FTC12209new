@@ -119,7 +119,8 @@ public class TestTeleop extends OpMode {
 
     private static final double TICKS_PER_REV = 28.0;
     private static final double RPM_TOLERANCE = 100.0;
-    private static final double RPM_ACCEL_RATE = 150.0; // NEW: RPM increase per loop - ADJUSTABLE
+    private static final double RPM_ACCEL_RATE = 25.0; // NEW: RPM increase per loop - ADJUSTABLE
+    private boolean lastDpadDown = false;
 
     @Override
     public void init() {
@@ -288,6 +289,13 @@ public class TestTeleop extends OpMode {
             s2.setPosition(.68);
             s3.setPower(0.0);
         }
+
+        boolean dpadDownPressed = gamepad1.dpad_down;
+        if (dpadDownPressed && !lastDpadDown) {
+            targetRPM = 1500;
+        }
+        lastDpadRight = dpadRightPressed;
+
         // === Flywheel RPM ===
         // Toggle distance-based RPM mode with X button
         boolean xPressed = gamepad1.x;
