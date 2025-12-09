@@ -112,15 +112,24 @@ public class TestTeleop extends OpMode {
     private final int[] rpmPresets = {2500, 3000};
     private int presetIndex = -1;
     private double targetRPM = 0;
-    private double currentTargetRPM = 0; // NEW: Smoothed target for ramping
     private boolean lastRightBumper = false;
     private boolean lastLeftBumper = false;
     private boolean lastDpadLeft = false;
 
     private static final double TICKS_PER_REV = 28.0;
     private static final double RPM_TOLERANCE = 100.0;
-    private static final double RPM_ACCEL_RATE = 25.0; // NEW: RPM increase per loop - ADJUSTABLE
     private boolean lastDpadDown = false;
+
+    // === PID Coefficients for Flywheel ===
+    private double kP = 0.001;
+    private double kI = 0.00001;
+    private double kD = 0.0;
+    private double kF = 0.00025; // Feedforward
+
+    // === PID variables for Flywheel ===
+    private double flywheelIntegral = 0;
+    private double flywheelLastError = 0;
+    private long flywheelLastTime = 0;
 
     @Override
     public void init() {
@@ -157,7 +166,7 @@ public class TestTeleop extends OpMode {
 
         // === Flywheel motor setup ===
         m3.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        m3.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        m3.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         m3.setDirection(DcMotorSimple.Direction.REVERSE);
 
         // === Intake motor setup ===
@@ -196,6 +205,7 @@ public class TestTeleop extends OpMode {
                 .build();
 
         tagLastTime = getTimeSeconds();
+        flywheelLastTime = System.nanoTime();
 
         telemetry.addLine("LM2 TeleOp Initialized");
         telemetry.addLine("B Button: AprilTag Body Tracking");
@@ -294,7 +304,7 @@ public class TestTeleop extends OpMode {
         if (dpadDownPressed && !lastDpadDown) {
             targetRPM = 1500;
         }
-        lastDpadRight = dpadRightPressed;
+        lastDpadDown = dpadDownPressed;
 
         // === Flywheel RPM ===
         // Toggle distance-based RPM mode with X button
@@ -312,7 +322,7 @@ public class TestTeleop extends OpMode {
                     double distance = detections.get(0).ftcPose.range;
                     targetRPM = (distance < 110.0) ? 2500 : 3000;
                 } else {
-                    // Default to 3000 if no tag visible
+                    // Default to 2500 if no tag visible
                     targetRPM = 2500;
                 }
             } else {
@@ -329,19 +339,35 @@ public class TestTeleop extends OpMode {
         lastLeftBumper = gamepad1.left_bumper;
         lastDpadLeft = gamepad1.dpad_left;
 
-        // NEW: Smoothly ramp currentTargetRPM toward targetRPM
-        if (Math.abs(targetRPM - currentTargetRPM) > RPM_ACCEL_RATE) {
-            if (currentTargetRPM < targetRPM) {
-                currentTargetRPM += RPM_ACCEL_RATE;
-            } else {
-                currentTargetRPM -= RPM_ACCEL_RATE;
-            }
-        } else {
-            currentTargetRPM = targetRPM;
-        }
+        // === PID Control for Flywheel ===
+        double currentVelocity = m3.getVelocity();
+        double currentRPM = (currentVelocity / TICKS_PER_REV) * 60.0;
 
-        double targetTicksPerSec = (currentTargetRPM / 60.0) * TICKS_PER_REV;
-        m3.setVelocity(targetTicksPerSec);
+        long currentTime = System.nanoTime();
+        double dt = (currentTime - flywheelLastTime) / 1e9; // Convert to seconds
+
+        double error = targetRPM - currentRPM;
+
+        flywheelIntegral += error * dt;
+        // Anti-windup
+        flywheelIntegral = Math.max(-10000, Math.min(10000, flywheelIntegral));
+
+        double derivative = (error - flywheelLastError) / dt;
+
+        // Feedforward term (estimated power needed for target RPM)
+        double feedforward = kF * targetRPM;
+
+        // PID output
+        double pidOutput = (kP * error) + (kI * flywheelIntegral) + (kD * derivative) + feedforward;
+
+        // Clamp output to [-1, 1]
+        pidOutput = Math.max(-1.0, Math.min(1.0, pidOutput));
+
+        // Apply power to motor
+        m3.setPower(pidOutput);
+
+        flywheelLastError = error;
+        flywheelLastTime = currentTime;
 
         updateRPMLED();
         updateTelemetry(normPos, shooterColorDetected);
@@ -402,6 +428,16 @@ public class TestTeleop extends OpMode {
     }
 
     private void updateRPMLED() {
+        // In intake mode, show white if ball detected
+        if (!shootingMode) {
+            String intakeDetected = detectIntakeColor();
+            if (!intakeDetected.equals("NONE")) {
+                led2.setPosition(1.0); // White when ball detected in intake
+                return;
+            }
+        }
+
+        // In shooting mode, show RPM status
         if (targetRPM == 0) {
             led2.setPosition(0); // Green when not spinning
             return;
@@ -512,7 +548,6 @@ public class TestTeleop extends OpMode {
     }
 
     private void autoIntakeColorCheck() {
-        // === FIXED: Remove allChambersFull check and fix chamber logic ===
         if (sorterMoving) return;
 
         String detected = detectIntakeColor();
@@ -531,7 +566,6 @@ public class TestTeleop extends OpMode {
             if (!chamberFull[currentChamber]) {
                 chamberFull[currentChamber] = true;
 
-                // === FIXED: Only move to next chamber if not all full ===
                 if (!allChambersFull()) {
                     // Find next empty chamber
                     int nextEmpty = findNextEmptyChamber(currentChamber);
@@ -547,7 +581,6 @@ public class TestTeleop extends OpMode {
         }
     }
 
-    // === FIXED: Add helper method to find next empty chamber ===
     private int findNextEmptyChamber(int startChamber) {
         // Try next chamber first
         int next = nextChamber(startChamber);
