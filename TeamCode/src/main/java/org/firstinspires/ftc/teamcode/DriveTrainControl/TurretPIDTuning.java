@@ -2,8 +2,10 @@ package org.firstinspires.ftc.teamcode.DriveTrainControl;
 
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
-import com.qualcomm.robotcore.hardware.CRServo;
-import com.arcrobotics.ftclib.controller.PDController;
+import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.firstinspires.ftc.vision.VisionPortal;
@@ -12,49 +14,72 @@ import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
 
 import java.util.List;
 
-@TeleOp(name = "Turret PID Tuning", group = "Tuning")
+@TeleOp(name = "Turret PID Tuning", group = "Test")
 public class TurretPIDTuning extends OpMode {
 
-    // === Turret Servo ===
-    private CRServo s1;
-
-    // === Vision ===
+    // === Hardware ===
+    private Servo turretServo;
     private VisionPortal visionPortal;
     private AprilTagProcessor aprilTag;
-    private PDController turretPD;
 
-    // === PID Tuning Variables ===
-    private double kP = 0.001;
-    private double kD = 0.0006;
-    private double acceptableTurretError = 0.25;
-    private boolean turretTrackingEnabled = false;
-    private boolean lastToggle = false;
+    // === Drive Train (for testing while moving) ===
+    DcMotorEx frontLeftMotor, backLeftMotor, frontRightMotor, backRightMotor;
 
-    // === Tuning Controls ===
-    private final double KP_STEP = 0.0001;  // Adjust P by 0.0001 per press
-    private final double KD_STEP = 0.00001; // Adjust D by 0.00001 per press
-    private final double ERROR_STEP = 0.05; // Adjust acceptable error by 0.05 per press
+    // === Turret Configuration ===
+    private static final double SERVO_RANGE_DEG = 300.0; // Total rotation range
+    private static final double CENTER_POSITION = 0.5; // Servo center position (0-1)
+    private static final double MIN_POSITION = 0.0;
+    private static final double MAX_POSITION = 1.0;
 
+    // Convert bearing angle to servo position
+    // Bearing is -150 to +150 degrees, servo is 0.0 to 1.0
+    private static final double BEARING_TO_SERVO_SCALE = 1.0 / SERVO_RANGE_DEG;
+
+    // === PID Coefficients - TUNE THESE ===
+    private double kP = 0.003;
+    private double kI = 0.0;
+    private double kD = 0.0005;
+
+    // === PID variables ===
+    private double integral = 0;
+    private double lastError = 0;
+    private long lastTime = 0;
+
+    // === Tracking Control ===
+    private boolean trackingEnabled = false;
+    private boolean lastAButton = false;
+    private double manualServoPosition = CENTER_POSITION;
+
+    // === Smoothing ===
+    private static final double SMOOTHING_ALPHA = 0.3; // Lower = smoother, higher = more responsive
+    private double smoothedBearing = 0.0;
+    private boolean bearingInitialized = false;
+
+    // === Adjustment increments ===
+    private static final double LARGE_INCREMENT = 0.0001;
+    private static final double SMALL_INCREMENT = 0.00001;
+    private static final double MANUAL_SERVO_INCREMENT = 0.01;
+
+    // === Button states ===
     private boolean lastDpadUp = false;
     private boolean lastDpadDown = false;
     private boolean lastDpadLeft = false;
     private boolean lastDpadRight = false;
+    private boolean lastX = false;
+    private boolean lastB = false;
+    private boolean lastY = false;
     private boolean lastLeftBumper = false;
     private boolean lastRightBumper = false;
 
-    // === Debug Info ===
-    private double currentError = 0;
-    private double turretPower = 0;
-    private boolean tagVisible = false;
-    private int tagID = -1;
+    // === Current parameter being tuned ===
+    private enum TuneParam { KP, KI, KD }
+    private TuneParam currentParam = TuneParam.KP;
 
     @Override
     public void init() {
         // === Turret Servo ===
-        s1 = hardwareMap.get(CRServo.class, "s1");
-
-        // === PD Controller ===
-        turretPD = new PDController(kP, kD);
+        turretServo = hardwareMap.get(Servo.class, "turret"); // Change name if needed
+        turretServo.setPosition(CENTER_POSITION);
 
         // === AprilTag Vision setup ===
         aprilTag = new AprilTagProcessor.Builder().build();
@@ -63,144 +88,212 @@ public class TurretPIDTuning extends OpMode {
                 .addProcessor(aprilTag)
                 .build();
 
-        telemetry.addLine("=== Turret PID Tuning ===");
-        telemetry.addLine("A Button: Toggle Tracking ON/OFF");
-        telemetry.addLine("Dpad Up/Down: Adjust kP");
-        telemetry.addLine("Dpad Left/Right: Adjust kD");
-        telemetry.addLine("Left/Right Bumper: Adjust Error Tolerance");
-        telemetry.addLine("Manual Control: Left/Right Triggers");
+        // === DriveTrain (optional for testing) ===
+        frontLeftMotor  = hardwareMap.get(DcMotorEx.class, "fL");
+        backLeftMotor   = hardwareMap.get(DcMotorEx.class, "bL");
+        frontRightMotor = hardwareMap.get(DcMotorEx.class, "fR");
+        backRightMotor  = hardwareMap.get(DcMotorEx.class, "bR");
+
+        frontLeftMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        backLeftMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        frontRightMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        backRightMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        frontLeftMotor.setDirection(DcMotorSimple.Direction.REVERSE);
+        backLeftMotor.setDirection(DcMotorSimple.Direction.REVERSE);
+
+        lastTime = System.nanoTime();
+
+        telemetry.addLine("Turret PID Tuning");
+        telemetry.addLine("===================");
+        telemetry.addLine("A: Toggle AprilTag Tracking");
+        telemetry.addLine("X/B/Y: Select kP/kI/kD");
+        telemetry.addLine("DpadUp/Down: Large adjust");
+        telemetry.addLine("DpadLeft/Right: Small adjust");
+        telemetry.addLine("LB/RB: Manual turret control");
         telemetry.update();
     }
 
     @Override
     public void loop() {
         // === Toggle Tracking (A Button) ===
-        boolean aPressed = gamepad1.a;
-        if (aPressed && !lastToggle) {
-            turretTrackingEnabled = !turretTrackingEnabled;
+        if (gamepad1.a && !lastAButton) {
+            trackingEnabled = !trackingEnabled;
+            if (trackingEnabled) {
+                bearingInitialized = false;
+                integral = 0;
+                lastError = 0;
+            }
         }
-        lastToggle = aPressed;
+        lastAButton = gamepad1.a;
 
-        // === PID Tuning Controls ===
-        // Adjust kP with Dpad Up/Down
+        // === Parameter selection ===
+        if (gamepad1.x && !lastX) currentParam = TuneParam.KP;
+        if (gamepad1.b && !lastB) currentParam = TuneParam.KI;
+        if (gamepad1.y && !lastY) currentParam = TuneParam.KD;
+
+        lastX = gamepad1.x;
+        lastB = gamepad1.b;
+        lastY = gamepad1.y;
+
+        // === Adjust current parameter ===
         if (gamepad1.dpad_up && !lastDpadUp) {
-            kP += KP_STEP;
-            turretPD = new PDController(kP, kD);
+            adjustParameter(LARGE_INCREMENT);
         }
         if (gamepad1.dpad_down && !lastDpadDown) {
-            kP -= KP_STEP;
-            if (kP < 0) kP = 0;
-            turretPD = new PDController(kP, kD);
+            adjustParameter(-LARGE_INCREMENT);
         }
-        lastDpadUp = gamepad1.dpad_up;
-        lastDpadDown = gamepad1.dpad_down;
-
-        // Adjust kD with Dpad Left/Right
         if (gamepad1.dpad_right && !lastDpadRight) {
-            kD += KD_STEP;
-            turretPD = new PDController(kP, kD);
+            adjustParameter(SMALL_INCREMENT);
         }
         if (gamepad1.dpad_left && !lastDpadLeft) {
-            kD -= KD_STEP;
-            if (kD < 0) kD = 0;
-            turretPD = new PDController(kP, kD);
+            adjustParameter(-SMALL_INCREMENT);
         }
+
+        lastDpadUp = gamepad1.dpad_up;
+        lastDpadDown = gamepad1.dpad_down;
         lastDpadLeft = gamepad1.dpad_left;
         lastDpadRight = gamepad1.dpad_right;
 
-        // Adjust acceptable error with Bumpers
-        if (gamepad1.right_bumper && !lastRightBumper) {
-            acceptableTurretError += ERROR_STEP;
+        // === Manual servo control (when tracking disabled) ===
+        if (!trackingEnabled) {
+            if (gamepad1.right_bumper && !lastRightBumper) {
+                manualServoPosition += MANUAL_SERVO_INCREMENT;
+                manualServoPosition = Math.min(MAX_POSITION, manualServoPosition);
+            }
+            if (gamepad1.left_bumper && !lastLeftBumper) {
+                manualServoPosition -= MANUAL_SERVO_INCREMENT;
+                manualServoPosition = Math.max(MIN_POSITION, manualServoPosition);
+            }
+            turretServo.setPosition(manualServoPosition);
         }
-        if (gamepad1.left_bumper && !lastLeftBumper) {
-            acceptableTurretError -= ERROR_STEP;
-            if (acceptableTurretError < 0) acceptableTurretError = 0;
-        }
-        lastLeftBumper = gamepad1.left_bumper;
         lastRightBumper = gamepad1.right_bumper;
+        lastLeftBumper = gamepad1.left_bumper;
 
-        // === Turret Control ===
-        if (turretTrackingEnabled) {
-            // Automatic AprilTag tracking
+        // === AprilTag Tracking PID Control ===
+        if (trackingEnabled) {
             List<AprilTagDetection> detections = aprilTag.getDetections();
-            if (!detections.isEmpty()) {
+
+            if (!detections.isEmpty() && detections.get(0).ftcPose != null) {
                 AprilTagDetection det = detections.get(0);
-                tagVisible = true;
-                tagID = det.id;
+                double bearing = det.ftcPose.bearing; // Angle to target in degrees
 
-                // Calculate error (target center is 320 for 640px width)
-                double tagX = det.center.x;
-                double errorX = tagX - (640.0 / 2.0);
-                currentError = errorX;
-
-                if (Math.abs(errorX) > acceptableTurretError) {
-                    turretPD.setSetPoint(0);
-                    double turretPow = turretPD.calculate(errorX);
-                    turretPow = com.qualcomm.robotcore.util.Range.clip(turretPow, -0.75, 0.75);
-                    turretPower = turretPow;
-                    s1.setPower(turretPow);
+                // Initialize or smooth the bearing
+                if (!bearingInitialized) {
+                    smoothedBearing = bearing;
+                    bearingInitialized = true;
                 } else {
-                    turretPower = 0;
-                    s1.setPower(0);
+                    smoothedBearing = SMOOTHING_ALPHA * bearing +
+                            (1.0 - SMOOTHING_ALPHA) * smoothedBearing;
                 }
+
+                // PID calculation
+                long currentTime = System.nanoTime();
+                double dt = (currentTime - lastTime) / 1e9; // Convert to seconds
+                if (dt <= 0) dt = 1e-6;
+
+                double error = smoothedBearing; // Error is the bearing itself (want it to be 0)
+
+                integral += error * dt;
+                // Anti-windup
+                integral = Math.max(-100.0, Math.min(100.0, integral));
+
+                double derivative = (error - lastError) / dt;
+
+                // PID output (in degrees)
+                double pidOutput = (kP * error) + (kI * integral) + (kD * derivative);
+
+                // Convert PID output (degrees) to servo position change
+                double servoChange = pidOutput * BEARING_TO_SERVO_SCALE;
+
+                // Get current servo position and apply correction
+                double currentServoPos = turretServo.getPosition();
+                double newServoPos = currentServoPos + servoChange;
+
+                // Clamp to servo limits
+                newServoPos = Math.max(MIN_POSITION, Math.min(MAX_POSITION, newServoPos));
+
+                turretServo.setPosition(newServoPos);
+                manualServoPosition = newServoPos; // Update manual position for when tracking disabled
+
+                lastError = error;
+                lastTime = currentTime;
+
+                // Telemetry for tracking
+                telemetry.addLine("=== TRACKING ACTIVE ===");
+                telemetry.addData("Tag ID", det.id);
+                telemetry.addData("Raw Bearing", String.format("%.2f°", bearing));
+                telemetry.addData("Smoothed Bearing", String.format("%.2f°", smoothedBearing));
+                telemetry.addData("Error", String.format("%.2f°", error));
+                telemetry.addData("Servo Position", String.format("%.3f", newServoPos));
+                telemetry.addData("Servo Change", String.format("%.4f", servoChange));
             } else {
-                tagVisible = false;
-                tagID = -1;
-                currentError = 0;
-                turretPower = 0;
-                s1.setPower(0);
+                // No tag visible - hold position
+                telemetry.addLine("=== NO TAG VISIBLE ===");
+                telemetry.addData("Status", "Holding Position");
             }
         } else {
-            // Manual control with triggers
-            tagVisible = false;
-            tagID = -1;
-            currentError = 0;
-            double manualPower = gamepad1.right_trigger - gamepad1.left_trigger;
-            turretPower = manualPower;
-            s1.setPower(manualPower);
+            telemetry.addLine("=== MANUAL MODE ===");
+            telemetry.addData("Servo Position", String.format("%.3f", manualServoPosition));
+            telemetry.addLine("Use LB/RB to adjust turret");
         }
 
-        updateTelemetry();
-    }
+        // === Drive Train (for testing while moving) ===
+        double y = applyDeadzone(-gamepad1.left_stick_y);
+        double x = applyDeadzone(gamepad1.left_stick_x);
+        double rx = applyDeadzone(gamepad1.right_stick_x);
 
-    private void updateTelemetry() {
-        telemetry.addLine("=== Turret PID Tuning ===");
-        telemetry.addData("Tracking", turretTrackingEnabled ? "ENABLED (A to disable)" : "DISABLED (A to enable)");
+        double fl = y + x + rx, bl = y - x + rx, fr = y - x - rx, br = y + x - rx;
+        double max = Math.max(1.0, Math.max(Math.abs(fl), Math.max(Math.abs(bl),
+                Math.max(Math.abs(fr), Math.abs(br)))));
+        frontLeftMotor.setPower(fl / max);
+        backLeftMotor.setPower(bl / max);
+        frontRightMotor.setPower(fr / max);
+        backRightMotor.setPower(br / max);
+
+        // === PID Parameters Display ===
+        telemetry.addLine();
+        telemetry.addLine("=== PID PARAMETERS ===");
+        telemetry.addData("kP (X)", String.format("%s%.6f", currentParam == TuneParam.KP ? ">>> " : "    ", kP));
+        telemetry.addData("kI (B)", String.format("%s%.6f", currentParam == TuneParam.KI ? ">>> " : "    ", kI));
+        telemetry.addData("kD (Y)", String.format("%s%.6f", currentParam == TuneParam.KD ? ">>> " : "    ", kD));
         telemetry.addLine();
 
-        telemetry.addLine("=== PID Values ===");
-        telemetry.addData("kP", String.format("%.6f (Dpad Up/Down)", kP));
-        telemetry.addData("kD", String.format("%.6f (Dpad Left/Right)", kD));
-        telemetry.addData("Error Tolerance", String.format("%.2f pixels (Bumpers)", acceptableTurretError));
-        telemetry.addLine();
-
-        telemetry.addLine("=== AprilTag Info ===");
-        telemetry.addData("Tag Visible", tagVisible ? "YES" : "NO");
-        if (tagVisible) {
-            telemetry.addData("Tag ID", tagID);
-            telemetry.addData("Error (pixels)", String.format("%.2f", currentError));
-            telemetry.addData("Aligned", Math.abs(currentError) <= acceptableTurretError ? "YES ✓" : "NO");
+        telemetry.addLine("=== CONTROLS ===");
+        telemetry.addData("Tracking", trackingEnabled ? "ON (A to disable)" : "OFF (A to enable)");
+        telemetry.addLine("X/B/Y: Select kP/kI/kD");
+        telemetry.addLine("DpadUp/Down: Large adjust (±0.0001)");
+        telemetry.addLine("DpadLeft/Right: Small adjust (±0.00001)");
+        if (!trackingEnabled) {
+            telemetry.addLine("LB/RB: Manual turret control");
         }
-        telemetry.addLine();
-
-        telemetry.addLine("=== Turret Status ===");
-        telemetry.addData("Power", String.format("%.3f", turretPower));
-        telemetry.addData("Manual Control", turretTrackingEnabled ? "Disabled" : "L/R Triggers");
-        telemetry.addLine();
-
-        telemetry.addLine("=== Controls ===");
-        telemetry.addLine("A: Toggle Tracking");
-        telemetry.addLine("Dpad ↑/↓: Adjust kP");
-        telemetry.addLine("Dpad ←/→: Adjust kD");
-        telemetry.addLine("Bumpers: Adjust Error Tolerance");
-        telemetry.addLine("Triggers: Manual Control (when OFF)");
 
         telemetry.update();
+    }
+
+    private void adjustParameter(double amount) {
+        switch (currentParam) {
+            case KP:
+                kP += amount;
+                kP = Math.max(0, kP);
+                break;
+            case KI:
+                kI += amount;
+                kI = Math.max(0, kI);
+                break;
+            case KD:
+                kD += amount;
+                kD = Math.max(0, kD);
+                break;
+        }
+    }
+
+    private double applyDeadzone(double v) {
+        return Math.abs(v) < 0.05 ? 0 : v;
     }
 
     @Override
     public void stop() {
         if (visionPortal != null) visionPortal.close();
-        s1.setPower(0);
+        turretServo.setPosition(CENTER_POSITION);
     }
 }
