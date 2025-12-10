@@ -81,8 +81,8 @@ public class TestTeleop extends OpMode {
     private ElapsedTime sorterSettleTimer = new ElapsedTime();
     private boolean sorterSettling = false;
     private static final int COARSE_TOL = 1000;
-    private static final int FINE_TOL = 100;
-    private static final int PERFECT_TOL = 80;
+    private static final int FINE_TOL = 60;
+    private static final int PERFECT_TOL = 30;
     private static final double MAX_POWER = 0.55;
     private static final double MIN_POWER = 0.08;
     private static final long SORTER_TIMEOUT_MS = 2000;
@@ -90,6 +90,7 @@ public class TestTeleop extends OpMode {
 
     private boolean lastXButton = false;
     private boolean distanceBasedRPM = false;
+    private double lastValidDistance = 110.0; // Store last valid AprilTag distance
 
     // === Jam detection ===
     private int lastSorterPosition = 0;
@@ -121,7 +122,7 @@ public class TestTeleop extends OpMode {
     private boolean lastDpadDown = false;
 
     // === PID Coefficients for Flywheel ===
-    private double kP = 0.001;
+    private double kP = 0.0012;
     private double kI = 0.00001;
     private double kD = 0.0;
     private double kF = 0.00025; // Feedforward
@@ -300,12 +301,6 @@ public class TestTeleop extends OpMode {
             s3.setPower(0.0);
         }
 
-        boolean dpadDownPressed = gamepad1.dpad_down;
-        if (dpadDownPressed && !lastDpadDown) {
-            targetRPM = 1500;
-        }
-        lastDpadDown = dpadDownPressed;
-
         // === Flywheel RPM ===
         // Toggle distance-based RPM mode with X button
         boolean xPressed = gamepad1.x;
@@ -320,24 +315,32 @@ public class TestTeleop extends OpMode {
                 List<AprilTagDetection> detections = aprilTag.getDetections();
                 if (!detections.isEmpty() && detections.get(0).ftcPose != null) {
                     double distance = detections.get(0).ftcPose.range;
+                    lastValidDistance = distance; // Update last valid distance
                     targetRPM = (distance < 110.0) ? 2500 : 3000;
                 } else {
-                    // Default to 2500 if no tag visible
-                    targetRPM = 2500;
+                    // Use last valid distance if no tag visible
+                    targetRPM = (lastValidDistance < 110.0) ? 2500 : 3000;
                 }
             } else {
                 // Manual cycle mode
                 presetIndex = (presetIndex + 1) % rpmPresets.length;
                 targetRPM = rpmPresets[presetIndex];
             }
-        } else if (gamepad1.left_bumper && !lastLeftBumper) {
+        } else if (gamepad1.dpad_down && !lastDpadDown) {
             targetRPM = 0;
         } else if (gamepad1.dpad_left && !lastDpadLeft) {
             targetRPM = -4000;
         }
+
+        boolean leftBumperPressed = gamepad1.left_bumper;
+        if (leftBumperPressed && !lastLeftBumper) {
+            targetRPM = 1500;
+        }
+
         lastRightBumper = gamepad1.right_bumper;
-        lastLeftBumper = gamepad1.left_bumper;
+        lastLeftBumper = leftBumperPressed;
         lastDpadLeft = gamepad1.dpad_left;
+        lastDpadDown = gamepad1.dpad_down;
 
         // === PID Control for Flywheel ===
         double currentVelocity = m3.getVelocity();
@@ -713,7 +716,8 @@ public class TestTeleop extends OpMode {
         telemetry.addLine("B: Tag Track");
         telemetry.addLine("Y: Mode | DpadRight: Switch Chamber");
         telemetry.addLine("A: Shoot | DpadUp: Clear Jam");
-        telemetry.addLine("RB: RPM+ | LB: RPM Off | DpadLeft: Reverse");
+        telemetry.addLine("RB: RPM+ | LB: 1500 RPM | DpadDown: RPM Off");
+        telemetry.addLine("DpadLeft: Reverse");
 
         telemetry.update();
     }
