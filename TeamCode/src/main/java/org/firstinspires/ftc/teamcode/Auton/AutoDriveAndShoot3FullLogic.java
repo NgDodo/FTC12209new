@@ -41,9 +41,6 @@ public class AutoDriveAndShoot3FullLogic extends OpMode {
     // === Color Sensors & LEDs (from TeleOp) ===
     private RevColorSensorV3 intakeColor;
     private RevColorSensorV3 shooterColor;
-    private DigitalChannel LED_Red;
-    private DigitalChannel LED_Green;
-    private DigitalChannel LED_Blue;
 
     // === Sorter constants (EXACT from TeleOp) ===
     private static final int FULL_ROT = 8192;
@@ -144,17 +141,6 @@ public class AutoDriveAndShoot3FullLogic extends OpMode {
         intakeColor = hardwareMap.get(RevColorSensorV3.class, "intakeColor");
         shooterColor = hardwareMap.get(RevColorSensorV3.class, "shooterColor");
 
-        // === LEDs ===
-        LED_Red = hardwareMap.get(DigitalChannel.class, "LED1");
-        LED_Green = hardwareMap.get(DigitalChannel.class, "LED2");
-        LED_Blue = hardwareMap.get(DigitalChannel.class, "LED3");
-        LED_Red.setMode(DigitalChannel.Mode.OUTPUT);
-        LED_Green.setMode(DigitalChannel.Mode.OUTPUT);
-        LED_Blue.setMode(DigitalChannel.Mode.OUTPUT);
-        LED_Red.setState(false);
-        LED_Green.setState(false);
-        LED_Blue.setState(false);
-
         // === Assume all chambers start full ===
         chamberFull[0] = true;
         chamberFull[1] = true;
@@ -183,7 +169,6 @@ public class AutoDriveAndShoot3FullLogic extends OpMode {
             checkChamberEmpty();
         }
         String shooterColorDetected = detectShooterColor();
-        updateColorLEDs(shooterColorDetected);
         updateRPMLED();
 
         // === Main state machine ===
@@ -451,20 +436,6 @@ public class AutoDriveAndShoot3FullLogic extends OpMode {
     private void updateRPMLED() {
         double currentRPM = (m3.getVelocity() / TICKS_PER_REV) * 60.0;
         double rpmError = Math.abs(SHOOTING_RPM - currentRPM);
-        LED_Red.setState(rpmError <= RPM_TOLERANCE);
-    }
-
-    private void updateColorLEDs(String color) {
-        if (color.equals("GREEN")) {
-            LED_Green.setState(true);
-            LED_Blue.setState(false);
-        } else if (color.equals("PURPLE")) {
-            LED_Green.setState(false);
-            LED_Blue.setState(true);
-        } else {
-            LED_Green.setState(false);
-            LED_Blue.setState(false);
-        }
     }
 
     private String detectShooterColor() {

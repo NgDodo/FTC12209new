@@ -36,9 +36,9 @@ public class TurretPIDTuning extends OpMode {
     private static final double BEARING_TO_SERVO_SCALE = 1.0 / SERVO_RANGE_DEG;
 
     // === PID Coefficients - TUNE THESE ===
-    private double kP = 0.003;
+    private double kP = 0.11;
     private double kI = 0.0;
-    private double kD = 0.0005;
+    private double kD = 0.003;
 
     // === PID variables ===
     private double integral = 0;
@@ -56,8 +56,8 @@ public class TurretPIDTuning extends OpMode {
     private boolean bearingInitialized = false;
 
     // === Adjustment increments ===
-    private static final double LARGE_INCREMENT = 0.0001;
-    private static final double SMALL_INCREMENT = 0.00001;
+    private static final double LARGE_INCREMENT = 0.002;
+    private static final double SMALL_INCREMENT = 0.0002;
     private static final double MANUAL_SERVO_INCREMENT = 0.01;
 
     // === Button states ===
