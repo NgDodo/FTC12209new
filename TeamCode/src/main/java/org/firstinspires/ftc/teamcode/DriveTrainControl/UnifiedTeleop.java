@@ -37,9 +37,6 @@ public class UnifiedTeleop extends OpMode {
     // === Color Sensors & LEDs ===
     private RevColorSensorV3 intakeColor;
     private RevColorSensorV3 shooterColor;
-    private DigitalChannel LED_Red;
-    private DigitalChannel LED_Green;
-    private DigitalChannel LED_Blue;
 
     // === Vision & IMU ===
     private VisionPortal visionPortal;
@@ -113,7 +110,7 @@ public class UnifiedTeleop extends OpMode {
     // === Jam detection ===
     private int lastSorterPosition = 0;
     private long lastSorterMoveTime = 0;
-    private static final long JAM_CHECK_INTERVAL_MS = 200;
+    private static final long JAM_CHECK_INTERVAL_MS = 999999999;
     private static final int MIN_MOVEMENT_TICKS = 50;
     private boolean sorterJammed = false;
 
@@ -192,16 +189,6 @@ public class UnifiedTeleop extends OpMode {
         intakeColor  = hardwareMap.get(RevColorSensorV3.class, "intakeColor");
         shooterColor = hardwareMap.get(RevColorSensorV3.class, "shooterColor");
 
-        // === LEDs ===
-        LED_Red   = hardwareMap.get(DigitalChannel.class, "LED1");
-        LED_Green = hardwareMap.get(DigitalChannel.class, "LED2");
-        LED_Blue  = hardwareMap.get(DigitalChannel.class, "LED3");
-        LED_Red.setMode(DigitalChannel.Mode.OUTPUT);
-        LED_Green.setMode(DigitalChannel.Mode.OUTPUT);
-        LED_Blue.setMode(DigitalChannel.Mode.OUTPUT);
-        LED_Red.setState(false);
-        LED_Green.setState(false);
-        LED_Blue.setState(false);
 
         // === IMU Setup ===
         imu = hardwareMap.get(IMU.class, "imu");
@@ -318,16 +305,13 @@ public class UnifiedTeleop extends OpMode {
         }
 
         String shooterColorDetected = detectShooterColor();
-        updateColorLEDs(shooterColorDetected);
 
         // === Intake ===
         if (!shootingMode) {
             double triggerPower = gamepad1.right_trigger - gamepad1.left_trigger;
             m1.setPower(-triggerPower);
-            m2.setPower(triggerPower);
         } else {
             m1.setPower(0);
-            m2.setPower(0);
         }
 
         // === Shooter ===
@@ -355,7 +339,6 @@ public class UnifiedTeleop extends OpMode {
         double targetTicksPerSec = (targetRPM / 60.0) * TICKS_PER_REV;
         m3.setVelocity(targetTicksPerSec);
 
-        updateRPMLED();
         updateTelemetry(normPos, shooterColorDetected);
     }
 
@@ -522,16 +505,6 @@ public class UnifiedTeleop extends OpMode {
         tagLastTime = getTimeSeconds();
     }
 
-    private void updateRPMLED() {
-        if (targetRPM == 0) {
-            LED_Red.setState(false);
-            return;
-        }
-        double currentRPM = (m3.getVelocity() / TICKS_PER_REV) * 60.0;
-        double rpmError = Math.abs(targetRPM - currentRPM);
-        LED_Red.setState(rpmError <= RPM_TOLERANCE);
-    }
-
     private void updateSorterMovement() {
         if (!sorterMoving) return;
 
@@ -604,19 +577,6 @@ public class UnifiedTeleop extends OpMode {
         sorterTimer.reset();
         lastSorterPosition = normalize(m2.getCurrentPosition());
         lastSorterMoveTime = System.currentTimeMillis();
-    }
-
-    private void updateColorLEDs(String color) {
-        if (color.equals("GREEN")) {
-            LED_Green.setState(true);
-            LED_Blue.setState(false);
-        } else if (color.equals("PURPLE")) {
-            LED_Green.setState(false);
-            LED_Blue.setState(true);
-        } else {
-            LED_Green.setState(false);
-            LED_Blue.setState(false);
-        }
     }
 
     private int getChamberPosition(int chamber, boolean shooting) {

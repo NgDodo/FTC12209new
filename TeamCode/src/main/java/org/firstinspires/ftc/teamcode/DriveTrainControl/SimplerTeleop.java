@@ -15,17 +15,15 @@ import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
-import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
-
 import java.util.List;
 
-@TeleOp(name = "Integrated Turret Tracking", group = "DriveTrainControl")
-public class IntegratedTurretTracking extends OpMode {
+@TeleOp(name = "SimplerTeleop", group = "DriveTrainControl")
+public class SimplerTeleop extends OpMode {
 
     // === Drive Train & Mechanisms ===
     DcMotorEx frontLeftMotor, backLeftMotor, frontRightMotor, backRightMotor;
     DcMotor m1;
-    DcMotorEx m2; // Turret motor
+    DcMotorEx m2;
     DcMotorEx m3, m0;
     CRServo s3;
     Servo s2;
@@ -168,9 +166,21 @@ public class IntegratedTurretTracking extends OpMode {
     private double flywheelLastError = 0;
     private long flywheelLastTime = 0;
 
+    // === MOTIF LOGIC ===
+    private enum Motif {
+        GPP,
+        PGP,
+        PPG,
+        NONE
+    }
+
+    private Motif currentMotif = Motif.NONE;
+    private int motifShotIndex = 0;
+    private boolean lastDpadUp = false;
+    private String[] chamberColors = new String[3];
+
     @Override
     public void init() {
-        // === DriveTrain ===
         frontLeftMotor  = hardwareMap.get(DcMotorEx.class, "fL");
         backLeftMotor   = hardwareMap.get(DcMotorEx.class, "bL");
         frontRightMotor = hardwareMap.get(DcMotorEx.class, "fR");
@@ -183,7 +193,6 @@ public class IntegratedTurretTracking extends OpMode {
         frontLeftMotor.setDirection(DcMotorSimple.Direction.REVERSE);
         backLeftMotor.setDirection(DcMotorSimple.Direction.REVERSE);
 
-        // === Mechanisms ===
         m1 = hardwareMap.get(DcMotor.class, "m1");
         m2 = hardwareMap.get(DcMotorEx.class, "m2");
         m3 = hardwareMap.get(DcMotorEx.class, "m3");
@@ -198,7 +207,6 @@ public class IntegratedTurretTracking extends OpMode {
             motor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         }
 
-        // === Turret Setup ===
         m2.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         m2.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         m2.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
@@ -213,17 +221,14 @@ public class IntegratedTurretTracking extends OpMode {
 
         m1.setDirection(DcMotorSimple.Direction.REVERSE);
 
-        // === Color Sensors ===
         intakeColor  = hardwareMap.get(RevColorSensorV3.class, "intakeColor");
         shooterColor = hardwareMap.get(RevColorSensorV3.class, "shooterColor");
 
-        // === RGB LEDs ===
         led1 = hardwareMap.get(Servo.class, "led1");
         led2 = hardwareMap.get(Servo.class, "led2");
         led1.setPosition(1.0);
         led2.setPosition(1.0);
 
-        // === IMU Setup ===
         imu = hardwareMap.get(IMU.class, "imu");
         IMU.Parameters imuParams = new IMU.Parameters(
                 new RevHubOrientationOnRobot(
@@ -234,7 +239,6 @@ public class IntegratedTurretTracking extends OpMode {
         imu.initialize(imuParams);
         imu.resetYaw();
 
-        // === Limelight Setup ===
         limelight = hardwareMap.get(Limelight3A.class, LIMELIGHT_NAME);
         limelight.setPollRateHz(100);
         limelight.pipelineSwitch(APRILTAG_PIPELINE);
@@ -244,14 +248,18 @@ public class IntegratedTurretTracking extends OpMode {
         turretLastTime = System.nanoTime();
         flywheelLastTime = System.nanoTime();
 
+        for (int i = 0; i < 3; i++) {
+            chamberColors[i] = "UNKNOWN";
+        }
+
         telemetry.addLine("Integrated Turret Tracking Initialized");
-        telemetry.addLine("B: Cycle Tracking Mode (OFF/Body/Turret)");
+        telemetry.addLine("B: Cycle Tracking Mode");
+        telemetry.addLine("DpadUp: Detect Motif from AprilTag");
         telemetry.update();
     }
 
     @Override
     public void loop() {
-        // === Tracking Mode Toggle (B Button) ===
         boolean bPressed = gamepad1.b;
         if (bPressed && !lastBButton) {
             switch (currentTrackingMode) {
@@ -275,12 +283,10 @@ public class IntegratedTurretTracking extends OpMode {
         }
         lastBButton = bPressed;
 
-        // === Drive Train ===
         double y = applyDeadzone(-gamepad1.left_stick_y);
         double x = applyDeadzone(gamepad1.left_stick_x);
         double rx = applyDeadzone(gamepad1.right_stick_x);
 
-        // === Apply tracking corrections ===
         if (currentTrackingMode == TrackingMode.BODY_TRACK) {
             double bodyCorrection = getBodyTrackingCorrection();
             rx -= bodyCorrection;
@@ -298,7 +304,12 @@ public class IntegratedTurretTracking extends OpMode {
         frontRightMotor.setPower(clipLowPower(fr / max));
         backRightMotor.setPower(clipLowPower(br / max));
 
-        // === Sorter ===
+        boolean dpadUpPressed = gamepad1.dpad_up;
+        if (dpadUpPressed && !lastDpadUp) {
+            detectMotifFromAprilTag();
+        }
+        lastDpadUp = dpadUpPressed;
+
         int rawPos = backRightMotor.getCurrentPosition();
         int normPos = normalize(rawPos);
 
@@ -307,14 +318,22 @@ public class IntegratedTurretTracking extends OpMode {
             shootingMode = !shootingMode;
             int targetPos = getChamberPosition(currentChamber, shootingMode);
             startSorterMove(targetPos);
+
+            if (shootingMode) {
+                motifShotIndex = 0;
+            }
         }
         lastY = yPressed;
 
         boolean dpadRightPressed = gamepad1.dpad_right;
         if (dpadRightPressed && !lastDpadRight) {
-            currentChamber = nextChamber(currentChamber);
-            int targetPos = getChamberPosition(currentChamber, shootingMode);
-            startSorterMove(targetPos);
+            if (currentMotif != Motif.NONE && shootingMode) {
+                advanceToNextMotifColor();
+            } else {
+                currentChamber = nextChamber(currentChamber);
+                int targetPos = getChamberPosition(currentChamber, shootingMode);
+                startSorterMove(targetPos);
+            }
         }
         lastDpadRight = dpadRightPressed;
 
@@ -329,7 +348,6 @@ public class IntegratedTurretTracking extends OpMode {
         String shooterColorDetected = detectShooterColor();
         updateColorLEDs(shooterColorDetected);
 
-        // === Intake ===
         if (!shootingMode) {
             double triggerPower = gamepad1.right_trigger - gamepad1.left_trigger;
             m1.setPower(triggerPower);
@@ -337,7 +355,6 @@ public class IntegratedTurretTracking extends OpMode {
             m1.setPower(0);
         }
 
-        // === Shooter ===
         if (gamepad1.a) {
             s2.setPosition(0);
             s3.setPower(1.0);
@@ -346,7 +363,6 @@ public class IntegratedTurretTracking extends OpMode {
             s3.setPower(0.0);
         }
 
-        // === Flywheel RPM ===
         boolean xPressed = gamepad1.x;
         if (xPressed && !lastXButton) {
             distanceBasedRPM = !distanceBasedRPM;
@@ -369,12 +385,12 @@ public class IntegratedTurretTracking extends OpMode {
         } else if (gamepad1.dpad_down && !lastDpadDown) {
             targetRPM = 0;
         } else if (gamepad1.dpad_left && !lastDpadLeft) {
-            targetRPM = -4000;
+            targetRPM = -2000;
         }
 
         boolean leftBumperPressed = gamepad1.left_bumper;
         if (leftBumperPressed && !lastLeftBumper) {
-            targetRPM = 1500;
+            targetRPM = 1000;
         }
 
         lastRightBumper = gamepad1.right_bumper;
@@ -382,7 +398,6 @@ public class IntegratedTurretTracking extends OpMode {
         lastDpadLeft = gamepad1.dpad_left;
         lastDpadDown = gamepad1.dpad_down;
 
-        // === Flywheel PID Control ===
         double currentVelocity = m3.getVelocity();
         double currentRPM = (currentVelocity / TICKS_PER_REV_FLYWHEEL) * 60.0;
 
@@ -407,6 +422,93 @@ public class IntegratedTurretTracking extends OpMode {
 
         updateRPMLED();
         updateTelemetry(normPos, shooterColorDetected);
+    }
+
+    private void detectMotifFromAprilTag() {
+        LLResult result = limelight.getLatestResult();
+
+        if (result != null && result.isValid()) {
+            List<LLResultTypes.FiducialResult> fiducials = result.getFiducialResults();
+
+            for (LLResultTypes.FiducialResult fiducial : fiducials) {
+                int id = fiducial.getFiducialId();
+
+                if (id == 21) {
+                    currentMotif = Motif.GPP;
+                    motifShotIndex = 0;
+                    return;
+                } else if (id == 22) {
+                    currentMotif = Motif.PGP;
+                    motifShotIndex = 0;
+                    return;
+                } else if (id == 23) {
+                    currentMotif = Motif.PPG;
+                    motifShotIndex = 0;
+                    return;
+                }
+            }
+        }
+    }
+
+    private void advanceToNextMotifColor() {
+        // What color do we need for this shot?
+        String requiredColor = getMotifColorAtIndex(motifShotIndex);
+
+        // Find which chamber number (0, 1, or 2) has that color
+        int targetChamber = -1;
+        for (int i = 0; i < 3; i++) {
+            if (chamberColors[i].equals(requiredColor) && chamberFull[i]) {
+                targetChamber = i;
+                break;
+            }
+        }
+
+        // If we found a chamber with the right color, go there
+        // Otherwise just advance normally
+        if (targetChamber != -1) {
+            currentChamber = targetChamber;
+        } else {
+            currentChamber = nextChamber(currentChamber);
+        }
+
+        // Move to that chamber position
+        int targetPos = getChamberPosition(currentChamber, shootingMode);
+        startSorterMove(targetPos);
+
+        // Increment to next shot in the motif
+        motifShotIndex = (motifShotIndex + 1) % 3;
+    }
+
+    private String getMotifColorAtIndex(int index) {
+        switch (currentMotif) {
+            case GPP:
+                return (index == 0) ? "GREEN" : "PURPLE";
+            case PGP:
+                return (index == 1) ? "GREEN" : "PURPLE";
+            case PPG:
+                return (index == 2) ? "GREEN" : "PURPLE";
+            default:
+                return "NONE";
+        }
+    }
+
+    private void updateChamberColors() {
+        // Only mark chambers as empty if they're not full
+        for (int i = 0; i < 3; i++) {
+            if (!chamberFull[i]) {
+                chamberColors[i] = "EMPTY";
+            }
+        }
+    }
+
+    private int findChamberWithColor(String color) {
+        // Search all chambers for the required color
+        for (int i = 0; i < 3; i++) {
+            if (chamberColors[i].equals(color) && chamberFull[i]) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private void updateTurretTracking(double robotRotation) {
@@ -557,7 +659,8 @@ public class IntegratedTurretTracking extends OpMode {
 
             LLResultTypes.FiducialResult validTarget = null;
             for (LLResultTypes.FiducialResult fiducial : fiducials) {
-                if (fiducial.getFiducialId() == 20 || fiducial.getFiducialId() == 24) {
+                int id = fiducial.getFiducialId();
+                if (id == 20 || id == 24) {
                     validTarget = fiducial;
                     break;
                 }
@@ -681,7 +784,8 @@ public class IntegratedTurretTracking extends OpMode {
             List<LLResultTypes.FiducialResult> fiducials = result.getFiducialResults();
 
             for (LLResultTypes.FiducialResult fiducial : fiducials) {
-                if (fiducial.getFiducialId() == 20 || fiducial.getFiducialId() == 24) {
+                int id = fiducial.getFiducialId();
+                if (id == 20 || id == 24) {
                     double area = fiducial.getTargetArea();
                     if (area > 3.0) {
                         return 80.0;
@@ -719,7 +823,7 @@ public class IntegratedTurretTracking extends OpMode {
     private void updateSorterMovement() {
         if (!sorterMoving) return;
 
-        int pos = normalize(backRightMotor.getCurrentPosition());  // or m2 depending on your motor
+        int pos = normalize(backRightMotor.getCurrentPosition());
         int error = calculateShortestError(pos, sorterTargetPosition);
 
         if (sorterTimer.milliseconds() > SORTER_TIMEOUT_MS) {
@@ -729,9 +833,8 @@ public class IntegratedTurretTracking extends OpMode {
             return;
         }
 
-        // TIGHTER TOLERANCES for faster completion
-        int FAST_PERFECT_TOL = 50;   // Reduced from 30-160
-        int FAST_FINE_TOL = 100;     // Reduced from 60-180
+        int FAST_PERFECT_TOL = 50;
+        int FAST_FINE_TOL = 100;
 
         if (Math.abs(error) <= FAST_PERFECT_TOL) {
             if (!sorterSettling) {
@@ -740,8 +843,7 @@ public class IntegratedTurretTracking extends OpMode {
                 m0.setPower(0);
             }
 
-            // SHORTER SETTLE TIME for faster response
-            long FAST_SETTLE_MS = 30;  // Reduced from 100ms
+            long FAST_SETTLE_MS = 30;
             if (sorterSettleTimer.milliseconds() >= FAST_SETTLE_MS) {
                 m0.setPower(0);
                 sorterMoving = false;
@@ -771,7 +873,6 @@ public class IntegratedTurretTracking extends OpMode {
 
         m0.setPower(Math.signum(error) * power);
     }
-
 
     private void startSorterMove(int targetPosition) {
         sorterTargetPosition = targetPosition;
@@ -820,6 +921,7 @@ public class IntegratedTurretTracking extends OpMode {
         if (System.currentTimeMillis() - colorStartTime >= DETECT_TIME_MS) {
             if (!chamberFull[currentChamber]) {
                 chamberFull[currentChamber] = true;
+                chamberColors[currentChamber] = detected;
                 currentChamber = nextChamber(currentChamber);
                 int target = getChamberPosition(currentChamber, false);
                 startSorterMove(target);
@@ -847,6 +949,7 @@ public class IntegratedTurretTracking extends OpMode {
         }
         if (System.currentTimeMillis() - emptyStartTime >= EMPTY_DETECT_TIME_MS) {
             chamberFull[currentChamber] = false;
+            chamberColors[currentChamber] = "EMPTY";
             emptyDetectionActive = false;
             emptyStartTime = 0;
         }
@@ -868,10 +971,6 @@ public class IntegratedTurretTracking extends OpMode {
         if (g > r && g > b && g > 80 && g < 600) return "GREEN";
         if (b > r && b > g && b > 80 && b < 600) return "PURPLE";
         return "NONE";
-    }
-
-    private boolean allChambersFull() {
-        return chamberFull[0] && chamberFull[1] && chamberFull[2];
     }
 
     private int nextChamber(int c) {
@@ -921,7 +1020,8 @@ public class IntegratedTurretTracking extends OpMode {
                     List<LLResultTypes.FiducialResult> fiducials = result.getFiducialResults();
                     LLResultTypes.FiducialResult validTarget = null;
                     for (LLResultTypes.FiducialResult fiducial : fiducials) {
-                        if (fiducial.getFiducialId() == 20 || fiducial.getFiducialId() == 24) {
+                        int id = fiducial.getFiducialId();
+                        if (id == 20 || id == 24) {
                             validTarget = fiducial;
                             break;
                         }
@@ -959,13 +1059,23 @@ public class IntegratedTurretTracking extends OpMode {
         }
         telemetry.addLine();
 
+        telemetry.addLine("=== Motif Logic ===");
+        telemetry.addData("Current Motif", currentMotif.toString());
+        if (currentMotif != Motif.NONE) {
+            telemetry.addData("Shot Number", (motifShotIndex + 1) + "/3");
+            telemetry.addData("Next Color", getMotifColorAtIndex(motifShotIndex));
+        }
+        telemetry.addData("Chamber Colors", String.format("[0]%s [1]%s [2]%s",
+                chamberColors[0], chamberColors[1], chamberColors[2]));
+        telemetry.addLine();
+
         telemetry.addLine("=== Sorter ===");
         telemetry.addData("Pos", normPos);
         telemetry.addData("Chamber", currentChamber + 1);
         telemetry.addData("Moving", sorterMoving);
-        String ch1 = chamberFull[0] ? "O" : "X";
-        String ch2 = chamberFull[1] ? "O" : "X";
-        String ch3 = chamberFull[2] ? "O" : "X";
+        String ch1 = chamberFull[0] ? "●" : "○";
+        String ch2 = chamberFull[1] ? "●" : "○";
+        String ch3 = chamberFull[2] ? "●" : "○";
         telemetry.addData("Ch1/2/3", ch1 + "/" + ch2 + "/" + ch3);
         telemetry.addData("Mode", shootingMode ? "SHOOT (Y)" : "INTAKE (Y)");
         telemetry.addData("Color", shooterColorDetected);
@@ -981,7 +1091,8 @@ public class IntegratedTurretTracking extends OpMode {
 
         telemetry.addLine("=== Controls ===");
         telemetry.addLine("B: Cycle Track Mode");
-        telemetry.addLine("Y: Mode | DpadRight: Chamber");
+        telemetry.addLine("DpadUp: Detect Motif from AprilTag");
+        telemetry.addLine("Y: Mode | DpadRight: Smart Chamber Advance");
         telemetry.addLine("A: Shoot");
         telemetry.addLine("RB: RPM | LB: 1500 | DpadDown: Off");
 
