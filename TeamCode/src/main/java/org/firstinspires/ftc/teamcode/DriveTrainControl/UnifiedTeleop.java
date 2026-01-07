@@ -125,7 +125,7 @@ public class UnifiedTeleop extends OpMode {
     private static final long EMPTY_DETECT_TIME_MS = 500;
 
     // === Shooter presets ===
-    private final int[] rpmPresets = {3200, 3500, 3800};
+    private final int[] rpmPresets = {3200, 3800};
     private int presetIndex = -1;
     private double targetRPM = 0;
     private boolean lastRightBumper = false;
