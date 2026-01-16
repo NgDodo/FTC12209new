@@ -129,10 +129,10 @@ public class TurretGoalTracking extends OpMode {
 
         // 3. Calculate turret offset relative to robot heading
         // Normalize the angle difference to [-PI, PI]
-        double turretRelativeOffset = normalizeAngle(angle_to_goal - follower.getHeading());
+        double turretDesiredRelativeOffset = normalizeAngle(angle_to_goal - follower.getHeading());
 
         // 4. Move turret to track the goal
-        moveTurretToOffset(m2, turretRelativeOffset);
+        double error = moveTurretToOffset(m2, turretDesiredRelativeOffset);
 
         // === Pose Reset System ===
         if (gamepad1.dpad_down) {
@@ -146,34 +146,40 @@ public class TurretGoalTracking extends OpMode {
                         follower.getPose().getY(),
                         Math.toDegrees(follower.getHeading())));
         telemetry.addData("Angle to Goal", "%.1f°", Math.toDegrees(angle_to_goal));
-        telemetry.addData("Turret Relative Offset", "%.1f°", Math.toDegrees(turretRelativeOffset));
+        telemetry.addData("Rotations to Goal", "%.2f", Math.toDegrees(angle_to_goal) / 360.0);
+        telemetry.addData("Turret Relative Offset", "%.1f°", Math.toDegrees(turretDesiredRelativeOffset));
         telemetry.addData("Turret Position", m2.getCurrentPosition());
         telemetry.addData("Turret Target", m2.getTargetPosition());
-        telemetry.addData("Turret Error", m2.getTargetPosition() - m2.getCurrentPosition());
+        telemetry.addData("Turret Rotations Error", error);
         telemetry.addData("Turret Rotations", "%.2f", m2.getCurrentPosition() / TICKS_PER_REV);
         telemetry.update();
     }
 
-    private void moveTurretToOffset(DcMotorEx turretMotor, double turretRelativeOffset) {
+    private double moveTurretToOffset(DcMotorEx turretMotor, double turretDesiredRelativeOffset) {
 
-        double turretDegrees = Math.toDegrees(turretRelativeOffset);
+        double turretDesiredDegrees = Math.toDegrees(turretDesiredRelativeOffset);
+        double turretRotations = turretMotor.getCurrentPosition() / TICKS_PER_REV;
+
+        double desiredRotations = turretDesiredDegrees / 360.0;
 
         // CORRECT gear relationship
-        double motorDegrees = turretDegrees * GEAR_RATIO;
+        // double motorDegrees = turretDegrees * GEAR_RATIO;
 
-        double motorTicks = (motorDegrees / 360.0) * TICKS_PER_REV;
+        // double motorTicks = (motorDegrees / 360.0) * TICKS_PER_REV;
 
-        int targetPosition = (int) Math.round(motorTicks);
+        // int targetPosition = (int) Math.round(motorTicks);
 
-        turretMotor.setTargetPosition(targetPosition);
+        // turretMotor.setTargetPosition(targetPosition);
 
-        int error = Math.abs(targetPosition - turretMotor.getCurrentPosition());
+        // int error = Math.abs(targetPosition - turretMotor.getCurrentPosition());
+        double error = desiredRotations - turretRotations;
 
-        if (error > TURRET_TOLERANCE_TICKS) {
+        if (error > 0.05) { // 0.05 rotations is a reasonable tolerance
             //turretMotor.setPower(TURRET_POWER);
         } else {
             //turretMotor.setPower(0);
         }
+        return error;
 
     }
 
