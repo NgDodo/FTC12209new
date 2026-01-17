@@ -3,10 +3,6 @@ package org.firstinspires.ftc.teamcode.DriveTrainControl.DeadWheelTracking;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.geometry.BezierLine;
 import com.pedropathing.geometry.Pose;
-import com.pedropathing.paths.HeadingInterpolator;
-import com.pedropathing.paths.Path;
-import com.pedropathing.paths.PathChain;
-import com.qualcomm.hardware.rev.RevColorSensorV3;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.CRServo;
@@ -23,9 +19,6 @@ import java.util.function.Supplier;
 public class TurretGoalTracking extends OpMode {
     private Follower follower;
     public static Pose startingPose;
-    private Supplier<PathChain> pathChain;
-    private boolean slowMode = false;
-    private double slowModeMultiplier = 0.5;
 
     // === Drive Train & Mechanisms ===
     DcMotorEx frontLeftMotor, backLeftMotor, frontRightMotor, backRightMotor;
@@ -35,20 +28,7 @@ public class TurretGoalTracking extends OpMode {
     CRServo s3;
     Servo s2;
 
-    // === Color Sensors & RGB LEDs ===
-    private RevColorSensorV3 intakeColor;
-    private RevColorSensorV3 shooterColor;
-    private Servo led1;
-    private Servo led2;
-
-    // === Turret Configuration ===
-    private static final double TURRET_RANGE_DEG = 330.0;
     private static final double TICKS_PER_REV = 1393.1;
-    private static final double OUTPUT_GEAR_TEETH = 44;
-    private static final double INPUT_GEAR_TEETH = 18;
-    private static final double GEAR_RATIO = INPUT_GEAR_TEETH / OUTPUT_GEAR_TEETH;
-    private static final double TURRET_POWER = 0.3; // Adjust as needed for your turret
-    private static final double TURRET_TOLERANCE_TICKS = 10; // How close is "close enough"
 
     @Override
     public void init() {
@@ -56,10 +36,6 @@ public class TurretGoalTracking extends OpMode {
         follower = Constants.createFollower(hardwareMap);
         follower.setStartingPose(startingPose == null ? new Pose() : startingPose);
         follower.update();
-        pathChain = () -> follower.pathBuilder()
-                .addPath(new Path(new BezierLine(follower::getPose, new Pose(45, 98))))
-                .setHeadingInterpolation(HeadingInterpolator.linearFromPoint(follower::getHeading, Math.toRadians(45), 0.8))
-                .build();
 
         // === DriveTrain ===
         frontLeftMotor = hardwareMap.get(DcMotorEx.class, "fL");
@@ -129,14 +105,14 @@ public class TurretGoalTracking extends OpMode {
 
         // 3. Calculate turret offset relative to robot heading
         // Normalize the angle difference to [-PI, PI]
-        double turretRelativeOffset = normalizeAngle(angle_to_goal - follower.getHeading());
+        double turretDesiredRelativeOffset = normalizeAngle(-angle_to_goal + follower.getHeading() + Math.PI);
 
         // 4. Move turret to track the goal
-        moveTurretToOffset(m2, turretRelativeOffset);
+        double error = moveTurretToOffset(m2, turretDesiredRelativeOffset);
 
         // === Pose Reset System ===
         if (gamepad1.dpad_down) {
-            follower.setPose(new Pose(72, 10, Math.PI / 2));
+            follower.setPose(new Pose(72, 72, Math.PI / 2));
         }
 
         // === Telemetry ===
@@ -146,35 +122,28 @@ public class TurretGoalTracking extends OpMode {
                         follower.getPose().getY(),
                         Math.toDegrees(follower.getHeading())));
         telemetry.addData("Angle to Goal", "%.1f°", Math.toDegrees(angle_to_goal));
-        telemetry.addData("Turret Relative Offset", "%.1f°", Math.toDegrees(turretRelativeOffset));
-        telemetry.addData("Turret Position", m2.getCurrentPosition());
-        telemetry.addData("Turret Target", m2.getTargetPosition());
-        telemetry.addData("Turret Error", m2.getTargetPosition() - m2.getCurrentPosition());
+        telemetry.addData("Rotations to Goal", "%.2f", Math.toDegrees(angle_to_goal) / 360.0);
+        telemetry.addData("Turret Relative Offset", "%.1f°", Math.toDegrees(turretDesiredRelativeOffset));
+        telemetry.addData("Turret Rotations Error", error);
         telemetry.addData("Turret Rotations", "%.2f", m2.getCurrentPosition() / TICKS_PER_REV);
         telemetry.update();
     }
 
-    private void moveTurretToOffset(DcMotorEx turretMotor, double turretRelativeOffset) {
+    private double moveTurretToOffset(DcMotorEx turretMotor, double turretDesiredRelativeOffset) {
+        double turretDesiredDegrees = Math.toDegrees(turretDesiredRelativeOffset);
+        double turretRotations = turretMotor.getCurrentPosition() / TICKS_PER_REV;
 
-        double turretDegrees = Math.toDegrees(turretRelativeOffset);
+        double desiredRotations = turretDesiredDegrees / 360.0;
 
-        // CORRECT gear relationship
-        double motorDegrees = turretDegrees * GEAR_RATIO;
+        double error = desiredRotations - turretRotations;
 
-        double motorTicks = (motorDegrees / 360.0) * TICKS_PER_REV;
-
-        int targetPosition = (int) Math.round(motorTicks);
-
-        turretMotor.setTargetPosition(targetPosition);
-
-        int error = Math.abs(targetPosition - turretMotor.getCurrentPosition());
-
-        if (error > TURRET_TOLERANCE_TICKS) {
-            //turretMotor.setPower(TURRET_POWER);
+        if (Math.abs(error) > 0.02) { // 0.02 rotations is a reasonable tolerance
+            // turretMotor.setPower(error / Math.abs(error) * gamepad1.right_trigger);
+            turretMotor.setPower(error / Math.abs(error) * 0.2);
         } else {
-            //turretMotor.setPower(0);
+            turretMotor.setPower(0);
         }
-
+        return error;
     }
 
 
