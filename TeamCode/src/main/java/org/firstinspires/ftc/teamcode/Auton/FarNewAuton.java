@@ -33,7 +33,7 @@ public class FarNewAuton extends OpMode {
     private DcMotor m1;
     private DcMotorEx bR;
     private DcMotorEx m0;
-    private DcMotorEx m3;
+    private DcMotorEx m3, m2;
     private Servo s2;
     private CRServo s3;
     private RevColorSensorV3 intakeColor;
@@ -116,6 +116,7 @@ public class FarNewAuton extends OpMode {
 
         // === Initialize Hardware ===
         m1 = hardwareMap.get(DcMotor.class, "m1");
+        m2 = hardwareMap.get(DcMotorEx.class, "m2");
         bR = hardwareMap.get(DcMotorEx.class, "bR");
         m0 = hardwareMap.get(DcMotorEx.class, "m0");
         m3 = hardwareMap.get(DcMotorEx.class, "m3");
@@ -234,6 +235,10 @@ public class FarNewAuton extends OpMode {
         }
 
         pathState = autonomousPathUpdate();
+
+        // hold turret state
+        m2.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        m2.setPower(0);
 
         int normPos = normalize(bR.getCurrentPosition());
         double currentRPM = (m3.getVelocity() / TICKS_PER_REV) * 60.0;

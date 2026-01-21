@@ -116,7 +116,7 @@ public class CompleteTurretTrackingBlue extends OpMode {
     private static final long EMPTY_DETECT_TIME_MS = 200;
 
     // === Shooter presets ===
-    private final int[] rpmPresets = {2600, 3200};
+    private final int[] rpmPresets = {2600, 3300};
     private int presetIndex = -1;
     private double targetRPM = 0;
     private boolean lastRightBumper = false;
@@ -142,7 +142,7 @@ public class CompleteTurretTrackingBlue extends OpMode {
 
     @Override
     public void init() {
-        startingPose = new Pose(72, 72, Math.toRadians(90));
+        startingPose = new Pose(20.9, 123.1, Math.toRadians(144));
         follower = Constants.createFollower(hardwareMap);
         follower.setStartingPose(startingPose == null ? new Pose() : startingPose);
         follower.update();
@@ -647,7 +647,7 @@ public class CompleteTurretTrackingBlue extends OpMode {
 
         if (Math.abs(error) > 0.02) { // 0.02 rotations is a reasonable tolerance
             // turretMotor.setPower(error / Math.abs(error) * gamepad1.right_trigger);
-            turretMotor.setPower(error / Math.abs(error) * 0.2);
+            turretMotor.setPower(error / Math.abs(error) * 0.3);
         } else {
             turretMotor.setPower(0);
         }

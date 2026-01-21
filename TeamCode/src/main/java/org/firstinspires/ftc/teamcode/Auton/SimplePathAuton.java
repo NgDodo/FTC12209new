@@ -33,7 +33,7 @@ public class SimplePathAuton extends OpMode {
     private DcMotor m1; // Intake motor
     private DcMotorEx bR; // Back right drive motor (sorter encoder)
     private DcMotorEx m0; // Sorter motor
-    private DcMotorEx m3; // Flywheel motor
+    private DcMotorEx m3, m2; // Flywheel motor
     private Servo s2; // Shooter servo
     private CRServo s3; // Shooter CRServo
     private RevColorSensorV3 intakeColor;
@@ -115,6 +115,7 @@ public class SimplePathAuton extends OpMode {
 
         // === Initialize Hardware ===
         m1 = hardwareMap.get(DcMotor.class, "m1");
+        m2 = hardwareMap.get(DcMotorEx.class, "m2");
         bR = hardwareMap.get(DcMotorEx.class, "bR");
         m0 = hardwareMap.get(DcMotorEx.class, "m0");
         m3 = hardwareMap.get(DcMotorEx.class, "m3");
@@ -274,6 +275,10 @@ public class SimplePathAuton extends OpMode {
         }
 
         pathState = autonomousPathUpdate();
+        // hold turret state
+        m2.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        m2.setPower(0);
+
 
         int normPos = normalize(bR.getCurrentPosition());
         double currentRPM = (m3.getVelocity() / TICKS_PER_REV) * 60.0;
