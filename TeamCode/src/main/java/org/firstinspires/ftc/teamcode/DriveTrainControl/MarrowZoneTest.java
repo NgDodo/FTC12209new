@@ -11,6 +11,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 // Import Marrow Zone classes
+import com.qualcomm.robotcore.hardware.Servo;
 import com.skeletonarmy.marrow.zones.Point;
 import com.skeletonarmy.marrow.zones.PolygonZone;
 
@@ -19,6 +20,8 @@ public class MarrowZoneTest extends OpMode {
 
     // === Define Field Zones ===
     // Close launch zone (triangle near high basket)
+
+
     private final PolygonZone closeLaunchZone = new PolygonZone(
             new Point(144, 144),
             new Point(72, 72),
@@ -61,11 +64,12 @@ public class MarrowZoneTest extends OpMode {
     private boolean wasFullyInRedBase = false;
     private boolean wasFullyInBlueBase = false;
 
+    Servo led1, led2;
     @Override
     public void init() {
         // Initialize Pedro Pathing
         follower = Constants.createFollower(hardwareMap);
-        follower.setStartingPose(new Pose(72, 72, 90)); // Start at field center
+        follower.setStartingPose(new Pose(72, 72, 0)); // Start at field center
 
         // Initialize drive motors
         frontLeftMotor  = hardwareMap.get(DcMotorEx.class, "fL");
@@ -90,6 +94,11 @@ public class MarrowZoneTest extends OpMode {
         telemetry.addLine("  Left Stick: Translate");
         telemetry.addLine("  Right Stick X: Rotate");
         telemetry.update();
+
+        led1 = hardwareMap.get(Servo.class, "led1");
+        led2 = hardwareMap.get(Servo.class, "led2");
+        led1.setPosition(1.0);
+        led2.setPosition(1.0);
     }
 
     @Override
@@ -196,14 +205,24 @@ public class MarrowZoneTest extends OpMode {
             telemetry.addLine("✓ PARKED IN RED BASE");
         } else if (fullyInBlueBase) {
             telemetry.addLine("✓ PARKED IN BLUE BASE");
+            led1.setPosition(0.611);
+            led2.setPosition(0.611);
         } else if (inCloseLaunch) {
             telemetry.addLine("→ In Close Launch Zone");
+            led1.setPosition(1);
+            led2.setPosition(1);
         } else if (inFarLaunch) {
             telemetry.addLine("→ In Far Launch Zone");
+            led1.setPosition(1);
+            led2.setPosition(1);
         } else if (nearRedBase || nearBlueBase) {
             telemetry.addLine("⚠ Near Base Zone");
+            led1.setPosition(0);
+            led2.setPosition(0);
         } else {
             telemetry.addLine("• Driving...");
+            led1.setPosition(0);
+            led2.setPosition(0);
         }
 
         telemetry.update();
