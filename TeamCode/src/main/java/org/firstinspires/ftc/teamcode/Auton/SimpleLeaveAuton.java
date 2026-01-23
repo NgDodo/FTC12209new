@@ -4,6 +4,7 @@ import com.bylazar.configurables.annotations.Configurable;
 import com.bylazar.telemetry.PanelsTelemetry;
 import com.bylazar.telemetry.TelemetryManager;
 import com.pedropathing.follower.Follower;
+import com.pedropathing.geometry.BezierCurve;
 import com.pedropathing.geometry.BezierLine;
 import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.PathChain;
@@ -16,11 +17,12 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
+
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "New Far Auton", group = "Autonomous")
+@Autonomous(name = "Simple Leave Auton", group = "Autonomous")
 @Configurable
-public class NewPathAuton extends OpMode {
+public class SimpleLeaveAuton extends OpMode {
 
     private TelemetryManager panelsTelemetry;
     public Follower follower;
@@ -29,18 +31,18 @@ public class NewPathAuton extends OpMode {
     private ElapsedTime pathTimer;
 
     // === Hardware ===
-    private DcMotor m1;
-    private DcMotorEx bR;
-    private DcMotorEx m0;
-    private DcMotorEx m3;
-    private Servo s2;
-    private CRServo s3;
+    private DcMotor m1; // Intake motor
+    private DcMotorEx bR; // Back right drive motor (sorter encoder)
+    private DcMotorEx m0; // Sorter motor
+    private DcMotorEx m3, m2; // Flywheel motor
+    private Servo s2; // Shooter servo
+    private CRServo s3; // Shooter CRServo
     private RevColorSensorV3 intakeColor;
     private RevColorSensorV3 shooterColor;
 
-    // === Paths ===
-    private PathChain Path1, Path2, Path3, Path4, Path5, Path6, Path7, Path8, Path9, Path10;
-    private PathChain Path11, Path12, Path13, Path14, Path15, Path16, Path17, Path18, Path19;
+    // === Paths from Pedro Pathing Visualizer ===
+    private PathChain Path1, Path2, Path3, Path4, Path5, Path6, Path7;
+    private PathChain Path8, Path9, Path10, Path11, Path12, Path13, Path14;
 
     // === Sorter constants ===
     private static final int FULL_ROT = 8192;
@@ -94,8 +96,8 @@ public class NewPathAuton extends OpMode {
     private static final double SPINUP_TIME = 0.75;
     private static final double SHOOT_DURATION = 0.3;
     private static final double SERVO_RETRACT_DELAY = 0.2;
-    private static final double SORTER_WAIT_TIME = 0.15;
-    private static final double MODE_TOGGLE_WAIT_TIME = 0.75;
+    private static final double SORTER_WAIT_TIME = 0.15; // Time to wait for sorter rotation
+    private static final double MODE_TOGGLE_WAIT_TIME = 0.75; // Time to wait for mode toggle
     private int shotsComplete = 0;
 
     // === Empty chamber detection ===
@@ -108,12 +110,13 @@ public class NewPathAuton extends OpMode {
         panelsTelemetry = PanelsTelemetry.INSTANCE.getTelemetry();
 
         follower = Constants.createFollower(hardwareMap);
-        follower.setStartingPose(new Pose(87.5, 9.0, Math.toRadians(90)));
+        follower.setStartingPose(new Pose(123.1, 123.1, Math.toRadians(36)));
 
         buildPaths();
 
         // === Initialize Hardware ===
         m1 = hardwareMap.get(DcMotor.class, "m1");
+        m2 = hardwareMap.get(DcMotorEx.class, "m2");
         bR = hardwareMap.get(DcMotorEx.class, "bR");
         m0 = hardwareMap.get(DcMotorEx.class, "m0");
         m3 = hardwareMap.get(DcMotorEx.class, "m3");
@@ -139,6 +142,7 @@ public class NewPathAuton extends OpMode {
 
         s2.setPosition(0.68);
 
+        // Initialize chambers as empty
         chamberFull[0] = false;
         chamberFull[1] = false;
         chamberFull[2] = false;
@@ -149,107 +153,17 @@ public class NewPathAuton extends OpMode {
         pathState = 0;
 
         panelsTelemetry.debug("Status", "Initialized");
-        panelsTelemetry.debug("Starting Pose", "X: 87.5, Y: 9.0, Heading: 90°");
+        panelsTelemetry.debug("Starting Pose", "X: 123.1, Y: 123.1, Heading: 36°");
         panelsTelemetry.update(telemetry);
     }
 
     private void buildPaths() {
-        Path1 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(87.500, 9.000), new Pose(87.500, 13.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(90), Math.toRadians(67))
-                .build();
-
-        Path2 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(87.500, 13.000), new Pose(103.000, 35.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(67), Math.toRadians(0))
-                .build();
-
-        Path3 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(103.000, 35.000), new Pose(107.000, 35.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
-                .build();
-
-        Path4 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(107.000, 35.000), new Pose(105.000, 35.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
-                .build();
-
-        Path5 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(105.000, 35.000), new Pose(112.000, 35.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
-                .build();
-
-        Path6 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(112.000, 35.000), new Pose(111.000, 35.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
-                .build();
-
-        Path7 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(111.000, 35.000), new Pose(120.000, 35.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
-                .build();
-
-        Path8 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(120.000, 35.000), new Pose(87.500, 13.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(67))
-                .build();
-
-        Path9 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(87.500, 13.000), new Pose(130.000, 16.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(67), Math.toRadians(350))
-                .build();
-
-        Path10 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(130.000, 16.000), new Pose(132.500, 15.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(350), Math.toRadians(350))
-                .build();
-
-        Path11 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(132.500, 15.000), new Pose(130.000, 12.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(350), Math.toRadians(350))
-                .build();
-
-        Path12 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(130.000, 12.000), new Pose(132.500, 11.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(350), Math.toRadians(350))
-                .build();
-
-        Path13 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(132.500, 11.000), new Pose(130.000, 9.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(350), Math.toRadians(0))
-                .build();
-
-        Path14 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(130.000, 9.000), new Pose(132.000, 9.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
-                .build();
-
-        Path15 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(132.000, 9.000), new Pose(132.000, 12.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
-                .build();
-
-        Path16 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(132.000, 12.000), new Pose(130.000, 12.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
-                .build();
-
-        Path17 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(130.000, 12.000), new Pose(132.000, 10.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
-                .build();
-
-        Path18 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(132.000, 10.000), new Pose(87.500, 13.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(67))
-                .build();
-
-        Path19 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(87.500, 13.000), new Pose(87.500, 30.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(67), Math.toRadians(90))
+        Path1 = follower
+                .pathBuilder()
+                .addPath(new BezierLine(new Pose(123.100, 123.100), new Pose(85, 123.1)))
+                .setLinearHeadingInterpolation(Math.toRadians(36), Math.toRadians(90))
                 .build();
     }
-
     @Override
     public void start() {
         autoTimer.reset();
@@ -274,6 +188,10 @@ public class NewPathAuton extends OpMode {
         }
 
         pathState = autonomousPathUpdate();
+        // hold turret state
+        m2.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        m2.setPower(0);
+
 
         int normPos = normalize(bR.getCurrentPosition());
         double currentRPM = (m3.getVelocity() / TICKS_PER_REV) * 60.0;
@@ -301,13 +219,13 @@ public class NewPathAuton extends OpMode {
         switch (pathState) {
             case 0: // Path 1
                 if (!follower.isBusy()) {
-                    pathState = 100; // Jump to first shooting sequence
+                    pathState = 100;
                     pathTimer.reset();
                 }
                 break;
 
             // === FIRST SHOOTING SEQUENCE (after Path 1) ===
-            case 100:
+            case 100: // Spinup flywheel
                 if (pathTimer.seconds() < SPINUP_TIME) {
                     targetRPM = SHOOTING_RPM;
                 } else {
@@ -317,7 +235,7 @@ public class NewPathAuton extends OpMode {
                 }
                 break;
 
-            case 101:
+            case 101: // FIXED: Wait for mode toggle instead of checking sorterMoving
                 if (pathTimer.seconds() >= MODE_TOGGLE_WAIT_TIME) {
                     rotateSorter();
                     pathTimer.reset();
@@ -325,7 +243,7 @@ public class NewPathAuton extends OpMode {
                 }
                 break;
 
-            case 102:
+            case 102: // Wait for sorter rotation
                 if (pathTimer.seconds() >= SORTER_WAIT_TIME) {
                     activateShooter();
                     pathTimer.reset();
@@ -333,7 +251,7 @@ public class NewPathAuton extends OpMode {
                 }
                 break;
 
-            case 103:
+            case 103: // Wait for shoot duration
                 if (pathTimer.seconds() >= SHOOT_DURATION) {
                     deactivateShooter();
                     shotsComplete++;
@@ -342,7 +260,7 @@ public class NewPathAuton extends OpMode {
                 }
                 break;
 
-            case 104:
+            case 104: // Wait for servo retract
                 if (pathTimer.seconds() >= SERVO_RETRACT_DELAY) {
                     rotateSorter();
                     pathTimer.reset();
@@ -350,7 +268,7 @@ public class NewPathAuton extends OpMode {
                 }
                 break;
 
-            case 105:
+            case 105: // Wait for sorter rotation
                 if (pathTimer.seconds() >= SORTER_WAIT_TIME) {
                     activateShooter();
                     pathTimer.reset();
@@ -358,7 +276,7 @@ public class NewPathAuton extends OpMode {
                 }
                 break;
 
-            case 106:
+            case 106: // Shoot 2
                 if (pathTimer.seconds() >= SHOOT_DURATION) {
                     deactivateShooter();
                     shotsComplete++;
@@ -367,7 +285,7 @@ public class NewPathAuton extends OpMode {
                 }
                 break;
 
-            case 107:
+            case 107: // Wait for servo retract
                 if (pathTimer.seconds() >= SERVO_RETRACT_DELAY) {
                     rotateSorter();
                     pathTimer.reset();
@@ -375,7 +293,7 @@ public class NewPathAuton extends OpMode {
                 }
                 break;
 
-            case 108:
+            case 108: // Wait for sorter rotation
                 if (pathTimer.seconds() >= SORTER_WAIT_TIME) {
                     activateShooter();
                     pathTimer.reset();
@@ -383,7 +301,7 @@ public class NewPathAuton extends OpMode {
                 }
                 break;
 
-            case 109:
+            case 109: // Shoot 3
                 if (pathTimer.seconds() >= SHOOT_DURATION) {
                     deactivateShooter();
                     shotsComplete++;
@@ -392,7 +310,7 @@ public class NewPathAuton extends OpMode {
                 }
                 break;
 
-            case 110:
+            case 110: // Wait for servo retract, then back to intake mode
                 if (pathTimer.seconds() >= SERVO_RETRACT_DELAY) {
                     toggleShootingMode();
                     targetRPM = IDLE_RPM;
@@ -401,35 +319,34 @@ public class NewPathAuton extends OpMode {
                 }
                 break;
 
-            case 111:
+            case 111: // FIXED: Wait for mode toggle
                 if (pathTimer.seconds() >= MODE_TOGGLE_WAIT_TIME) {
                     follower.followPath(Path2);
                     pathState = 1;
                 }
                 break;
 
-            // === INTAKE PATHS 2-8 ===
+            // === INTAKE PATHS 2-7 ===
             case 1: // Path 2
                 if (!follower.isBusy()) {
-                    startIntake(); // Start intake for paths 3-7
+                    startIntake();
                     follower.followPath(Path3);
                     pathState++;
                 }
                 break;
 
-            case 2: // Path 3 (Intake running)
+            case 2: // Path 3 (Intake running continuously)
                 if (!follower.isBusy()) {
-                    // Rotate sorter at end of Path 3
                     manualSorterMode = true;
                     currentChamber = nextChamber(currentChamber);
-                    int target3 = getChamberPosition(currentChamber, false);
-                    startSorterMove(target3);
+                    int target = getChamberPosition(currentChamber, false);
+                    startSorterMove(target);
                     pathTimer.reset();
                     pathState++;
                 }
                 break;
 
-            case 3: // Wait for sorter
+            case 3: // Wait for sorter rotation
                 if (pathTimer.seconds() >= SORTER_WAIT_TIME) {
                     manualSorterMode = false;
                     follower.followPath(Path4);
@@ -437,16 +354,8 @@ public class NewPathAuton extends OpMode {
                 }
                 break;
 
-            case 4: // Path 4 (Intake running)
+            case 4: // Path 4 (Intake running continuously)
                 if (!follower.isBusy()) {
-                    follower.followPath(Path5);
-                    pathState++;
-                }
-                break;
-
-            case 5: // Path 5 (Intake running)
-                if (!follower.isBusy()) {
-                    // Rotate sorter at end of Path 5
                     manualSorterMode = true;
                     currentChamber = nextChamber(currentChamber);
                     int target5 = getChamberPosition(currentChamber, false);
@@ -456,51 +365,38 @@ public class NewPathAuton extends OpMode {
                 }
                 break;
 
-            case 6: // Wait for sorter
+            case 5: // Wait for sorter rotation
                 if (pathTimer.seconds() >= SORTER_WAIT_TIME) {
                     manualSorterMode = false;
+                    follower.followPath(Path5);
+                    pathState++;
+                }
+                break;
+
+            case 6: // Path 5 (Intake running continuously)
+                if (!follower.isBusy()) {
                     follower.followPath(Path6);
                     pathState++;
                 }
                 break;
 
-            case 7: // Path 6 (Intake running)
+            case 7: // Path 6 (Intake running continuously)
                 if (!follower.isBusy()) {
+                    stopIntake();
                     follower.followPath(Path7);
                     pathState++;
                 }
                 break;
 
-            case 8: // Path 7 (Intake running)
+            case 8: // Path 7
                 if (!follower.isBusy()) {
-                    // Rotate sorter at end of Path 7
-                    stopIntake(); // Stop intake after Path 7
-                    manualSorterMode = true;
-                    currentChamber = nextChamber(currentChamber);
-                    int target7 = getChamberPosition(currentChamber, false);
-                    startSorterMove(target7);
-                    pathTimer.reset();
-                    pathState++;
-                }
-                break;
-
-            case 9: // Wait for sorter
-                if (pathTimer.seconds() >= SORTER_WAIT_TIME) {
-                    manualSorterMode = false;
-                    follower.followPath(Path8);
-                    pathState++;
-                }
-                break;
-
-            case 10: // Path 8
-                if (!follower.isBusy()) {
-                    pathState = 200; // Jump to second shooting sequence
+                    pathState = 200;
                     pathTimer.reset();
                 }
                 break;
 
-            // === SECOND SHOOTING SEQUENCE (after Path 8) ===
-            case 200:
+            // === SECOND SHOOTING SEQUENCE (after Path 7) ===
+            case 200: // Spinup flywheel
                 if (pathTimer.seconds() < SPINUP_TIME) {
                     targetRPM = SHOOTING_RPM;
                 } else {
@@ -510,7 +406,7 @@ public class NewPathAuton extends OpMode {
                 }
                 break;
 
-            case 201:
+            case 201: // FIXED: Wait for mode toggle
                 if (pathTimer.seconds() >= MODE_TOGGLE_WAIT_TIME) {
                     rotateSorter();
                     pathTimer.reset();
@@ -518,7 +414,7 @@ public class NewPathAuton extends OpMode {
                 }
                 break;
 
-            case 202:
+            case 202: // Wait for sorter rotation
                 if (pathTimer.seconds() >= SORTER_WAIT_TIME) {
                     activateShooter();
                     pathTimer.reset();
@@ -543,7 +439,7 @@ public class NewPathAuton extends OpMode {
                 }
                 break;
 
-            case 205:
+            case 205: // Wait for sorter rotation
                 if (pathTimer.seconds() >= SORTER_WAIT_TIME) {
                     activateShooter();
                     pathTimer.reset();
@@ -568,7 +464,7 @@ public class NewPathAuton extends OpMode {
                 }
                 break;
 
-            case 208:
+            case 208: // Wait for sorter rotation
                 if (pathTimer.seconds() >= SORTER_WAIT_TIME) {
                     activateShooter();
                     pathTimer.reset();
@@ -585,7 +481,7 @@ public class NewPathAuton extends OpMode {
                 }
                 break;
 
-            case 210:
+            case 210: // Back to intake mode
                 if (pathTimer.seconds() >= SERVO_RETRACT_DELAY) {
                     toggleShootingMode();
                     targetRPM = IDLE_RPM;
@@ -594,25 +490,24 @@ public class NewPathAuton extends OpMode {
                 }
                 break;
 
-            case 211:
+            case 211: // FIXED: Wait for mode toggle
                 if (pathTimer.seconds() >= MODE_TOGGLE_WAIT_TIME) {
-                    follower.followPath(Path9);
-                    pathState = 11;
+                    follower.followPath(Path8);
+                    pathState = 9;
                 }
                 break;
 
-            // === INTAKE PATHS 9-18 ===
-            case 11: // Path 9
+            // === INTAKE PATHS 8-12 ===
+            case 9: // Path 8
                 if (!follower.isBusy()) {
-                    startIntake(); // Start intake for paths 9-12
-                    follower.followPath(Path10);
+                    startIntake();
+                    follower.followPath(Path9);
                     pathState++;
                 }
                 break;
 
-            case 12: // Path 10 (Intake running)
+            case 10: // Path 9 (Intake running continuously)
                 if (!follower.isBusy()) {
-                    // Rotate sorter at end of Path 10
                     manualSorterMode = true;
                     currentChamber = nextChamber(currentChamber);
                     int target10 = getChamberPosition(currentChamber, false);
@@ -622,25 +517,16 @@ public class NewPathAuton extends OpMode {
                 }
                 break;
 
-            case 13: // Wait for sorter
+            case 11: // Wait for sorter rotation
                 if (pathTimer.seconds() >= SORTER_WAIT_TIME) {
                     manualSorterMode = false;
-                    follower.followPath(Path11);
+                    follower.followPath(Path10);
                     pathState++;
                 }
                 break;
 
-            case 14: // Path 11 (Intake running)
+            case 12: // Path 10 (Intake running continuously)
                 if (!follower.isBusy()) {
-                    follower.followPath(Path12);
-                    pathState++;
-                }
-                break;
-
-            case 15: // Path 12 (Intake running)
-                if (!follower.isBusy()) {
-                    // Rotate sorter at end of Path 12
-                    stopIntake(); // Stop intake after Path 12
                     manualSorterMode = true;
                     currentChamber = nextChamber(currentChamber);
                     int target12 = getChamberPosition(currentChamber, false);
@@ -650,73 +536,38 @@ public class NewPathAuton extends OpMode {
                 }
                 break;
 
-            case 16: // Wait for sorter
+            case 13: // Wait for sorter rotation
                 if (pathTimer.seconds() >= SORTER_WAIT_TIME) {
                     manualSorterMode = false;
+                    follower.followPath(Path11);
+                    pathState++;
+                }
+                break;
+
+            case 14: // Path 11 (Intake running continuously)
+                if (!follower.isBusy()) {
+                    follower.followPath(Path12);
+                    pathState++;
+                }
+                break;
+
+            case 15: // Path 12 (Intake running continuously)
+                if (!follower.isBusy()) {
+                    stopIntake();
                     follower.followPath(Path13);
                     pathState++;
                 }
                 break;
 
-            case 17: // Path 13
+            case 16: // Path 13
                 if (!follower.isBusy()) {
-                    follower.followPath(Path14);
-                    pathState++;
-                }
-                break;
-
-            case 18: // Path 14
-                if (!follower.isBusy()) {
-                    follower.followPath(Path15);
-                    pathState++;
-                }
-                break;
-
-            case 19: // Path 15
-                if (!follower.isBusy()) {
-                    follower.followPath(Path16);
-                    pathState++;
-                }
-                break;
-
-            case 20: // Path 16
-                if (!follower.isBusy()) {
-                    startIntake(); // Start intake for Path 17
-                    follower.followPath(Path17);
-                    pathState++;
-                }
-                break;
-
-            case 21: // Path 17 (Intake running)
-                if (!follower.isBusy()) {
-                    // Rotate sorter at end of Path 17
-                    stopIntake(); // Stop intake after Path 17
-                    manualSorterMode = true;
-                    currentChamber = nextChamber(currentChamber);
-                    int target17 = getChamberPosition(currentChamber, false);
-                    startSorterMove(target17);
-                    pathTimer.reset();
-                    pathState++;
-                }
-                break;
-
-            case 22: // Wait for sorter
-                if (pathTimer.seconds() >= SORTER_WAIT_TIME) {
-                    manualSorterMode = false;
-                    follower.followPath(Path18);
-                    pathState++;
-                }
-                break;
-
-            case 23: // Path 18
-                if (!follower.isBusy()) {
-                    pathState = 300; // Jump to third shooting sequence
+                    pathState = 300;
                     pathTimer.reset();
                 }
                 break;
 
-            // === THIRD SHOOTING SEQUENCE (after Path 18) ===
-            case 300:
+            // === THIRD SHOOTING SEQUENCE (after Path 13) ===
+            case 300: // Spinup flywheel
                 if (pathTimer.seconds() < SPINUP_TIME) {
                     targetRPM = SHOOTING_RPM;
                 } else {
@@ -726,7 +577,7 @@ public class NewPathAuton extends OpMode {
                 }
                 break;
 
-            case 301:
+            case 301: // FIXED: Wait for mode toggle
                 if (pathTimer.seconds() >= MODE_TOGGLE_WAIT_TIME) {
                     rotateSorter();
                     pathTimer.reset();
@@ -734,7 +585,7 @@ public class NewPathAuton extends OpMode {
                 }
                 break;
 
-            case 302:
+            case 302: // Wait for sorter rotation
                 if (pathTimer.seconds() >= SORTER_WAIT_TIME) {
                     activateShooter();
                     pathTimer.reset();
@@ -759,7 +610,7 @@ public class NewPathAuton extends OpMode {
                 }
                 break;
 
-            case 305:
+            case 305: // Wait for sorter rotation
                 if (pathTimer.seconds() >= SORTER_WAIT_TIME) {
                     activateShooter();
                     pathTimer.reset();
@@ -784,7 +635,7 @@ public class NewPathAuton extends OpMode {
                 }
                 break;
 
-            case 308:
+            case 308: // Wait for sorter rotation
                 if (pathTimer.seconds() >= SORTER_WAIT_TIME) {
                     activateShooter();
                     pathTimer.reset();
@@ -801,25 +652,24 @@ public class NewPathAuton extends OpMode {
                 }
                 break;
 
-            case 310:
+            case 310: // Final state
                 if (pathTimer.seconds() >= SERVO_RETRACT_DELAY) {
                     toggleShootingMode();
-                    targetRPM = IDLE_RPM;
+                    targetRPM = 0;
                     pathTimer.reset();
                     pathState++;
                 }
                 break;
 
-            case 311:
+            case 311: // FIXED: Wait for mode toggle
                 if (pathTimer.seconds() >= MODE_TOGGLE_WAIT_TIME) {
-                    follower.followPath(Path19);
+                    follower.followPath(Path14);
                     pathState++;
                 }
                 break;
 
-            case 312: // Path 19 - Final parking
+            case 312: // NEW: Path 14 - Final parking
                 if (!follower.isBusy()) {
-                    targetRPM = 0;
                     pathState = 999;
                 }
                 break;

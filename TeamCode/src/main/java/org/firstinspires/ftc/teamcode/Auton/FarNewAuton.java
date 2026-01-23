@@ -19,9 +19,9 @@ import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "Mirrored Path Following", group = "Autonomous")
+@Autonomous(name = "New Far Path Following MIRROR", group = "Autonomous")
 @Configurable
-public class MirroredPathAuton extends OpMode {
+public class FarNewAuton extends OpMode {
 
     private TelemetryManager panelsTelemetry;
     public Follower follower;
@@ -30,18 +30,17 @@ public class MirroredPathAuton extends OpMode {
     private ElapsedTime pathTimer;
 
     // === Hardware ===
-    private DcMotor m1; // Intake motor
-    private DcMotorEx bR; // Back right drive motor (sorter encoder)
-    private DcMotorEx m0; // Sorter motor
-    private DcMotorEx m3, m2; // Flywheel motor
-    private Servo s2; // Shooter servo
-    private CRServo s3; // Shooter CRServo
+    private DcMotor m1;
+    private DcMotorEx bR;
+    private DcMotorEx m0;
+    private DcMotorEx m3, m2;
+    private Servo s2;
+    private CRServo s3;
     private RevColorSensorV3 intakeColor;
     private RevColorSensorV3 shooterColor;
 
-    // === Paths from Pedro Pathing Visualizer (MIRRORED) ===
-    private PathChain Path1, Path2, Path3, Path4, Path5, Path6, Path7;
-    private PathChain Path8, Path9, Path10, Path11, Path12, Path13, Path14;
+    // === Paths ===
+    private PathChain Path1, Path2, Path3, Path4, Path5, Path6, Path7, Path8, Path9;
 
     // === Sorter constants ===
     private static final int FULL_ROT = 8192;
@@ -91,12 +90,13 @@ public class MirroredPathAuton extends OpMode {
 
     // === Shooting parameters ===
     private static final double IDLE_RPM = 2000;
-    private static final double SHOOTING_RPM = 2550;
-    private static final double SPINUP_TIME = 0.75;
-    private static final double SHOOT_DURATION = 0.3;
-    private static final double SERVO_RETRACT_DELAY = 0.2;
+    private static final double SHOOTING_RPM = 3200;
+    private static final double FIRST_SPINUP_TIME = 5;  // From idle to shooting RPM
+    private static final double QUICK_SPINUP_TIME = 0.5;  // Already at shooting RPM, just verify
+    private static final double SHOOT_DURATION = 1.0;
+    private static final double SERVO_RETRACT_DELAY = 1.00;
     private static final double SORTER_WAIT_TIME = 0.15;
-    private static final double MODE_TOGGLE_WAIT_TIME = 0.75;
+    private static final double MODE_TOGGLE_WAIT_TIME = 0.5;
     private int shotsComplete = 0;
 
     // === Empty chamber detection ===
@@ -109,8 +109,8 @@ public class MirroredPathAuton extends OpMode {
         panelsTelemetry = PanelsTelemetry.INSTANCE.getTelemetry();
 
         follower = Constants.createFollower(hardwareMap);
-        // MIRRORED: X: 123.1 -> 20.9 (144 - 123.1), Heading: 36° -> 144° (180 - 36)
-        follower.setStartingPose(new Pose(20.9, 123.1, Math.toRadians(144)));
+        // Mirrored starting position: X is flipped across field center (144 - 87.5 = 56.5)
+        follower.setStartingPose(new Pose(56.5, 9.0, Math.toRadians(90)));
 
         buildPaths();
 
@@ -142,7 +142,6 @@ public class MirroredPathAuton extends OpMode {
 
         s2.setPosition(0.68);
 
-        // Initialize chambers as empty
         chamberFull[0] = false;
         chamberFull[1] = false;
         chamberFull[2] = false;
@@ -152,132 +151,63 @@ public class MirroredPathAuton extends OpMode {
         flywheelLastTime = System.nanoTime();
         pathState = 0;
 
-        panelsTelemetry.debug("Status", "Initialized (MIRRORED)");
-        panelsTelemetry.debug("Starting Pose", "X: 20.9, Y: 123.1, Heading: 144°");
+        panelsTelemetry.debug("Status", "Initialized");
+        panelsTelemetry.debug("Starting Pose", "X: 56.5, Y: 9.0, Heading: 90°");
         panelsTelemetry.update(telemetry);
     }
 
     private void buildPaths() {
-        // MIRRORED PATHS: X coordinates mirrored across center (144 - X), headings mirrored (180 - heading)
+        // All X coordinates mirrored: new_x = 144 - original_x
+        // Headings mirrored: new_heading = 180° - original_heading
 
-        // Path1: (123.1, 123.1, 36°) -> (90, 90, 45°)
-        // MIRRORED: (20.9, 123.1, 144°) -> (54, 90, 135°)
-        Path1 = follower
-                .pathBuilder()
-                .addPath(new BezierLine(new Pose(20.9, 123.1), new Pose(54.0, 90.0)))
-                .setLinearHeadingInterpolation(Math.toRadians(144), Math.toRadians(135))
+        Path1 = follower.pathBuilder()
+                .addPath(new BezierLine(new Pose(56.5, 9.0), new Pose(56.5, 13.0)))
+                .setLinearHeadingInterpolation(Math.toRadians(90), Math.toRadians(114.5))
                 .build();
 
-        // Path2: (90, 90, 45°) -> curve via (80, 82) -> (95, 82, 0°)
-        // MIRRORED: (54, 90, 135°) -> curve via (64, 82) -> (49, 82, 180°)
         Path2 = follower
                 .pathBuilder()
                 .addPath(new BezierCurve(
-                        new Pose(54.0, 90.0),
-                        new Pose(64.0, 84.0),
-                        new Pose(47.0, 84.0)
+                        new Pose(56.5, 13),
+                        new Pose(56.5, 36),
+                        new Pose(45, 36)
                 ))
-                .setLinearHeadingInterpolation(Math.toRadians(135), Math.toRadians(180))
+                .setLinearHeadingInterpolation(Math.toRadians(140), Math.toRadians(180))
                 .build();
 
-        // Path3: (95, 82, 0°) -> (104, 82, 0°)
-        // MIRRORED: (49, 82, 180°) -> (40, 82, 180°)
-        Path3 = follower
-                .pathBuilder()
-                .addPath(new BezierLine(new Pose(47.0, 84.0), new Pose(38.0, 84.0)))
+        Path3 = follower.pathBuilder()
+                .addPath(new BezierLine(new Pose(45.0, 36), new Pose(38.0, 36)))
                 .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
                 .build();
 
-        // Path4: (104, 82, 0°) -> (108.5, 82, 0°)
-        // MIRRORED: (40, 82, 180°) -> (35.5, 82, 180°)
-        Path4 = follower
-                .pathBuilder()
-                .addPath(new BezierLine(new Pose(38.0, 86.0), new Pose(33.5, 86.0)))
+        Path4 = follower.pathBuilder()
+                .addPath(new BezierLine(new Pose(38.0, 36), new Pose(39.0, 36.0)))
                 .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
                 .build();
 
-        // Path5: (108.5, 82, 0°) -> (107.5, 82, 0°)
-        // MIRRORED: (35.5, 82, 180°) -> (36.5, 82, 180°)
-        Path5 = follower
-                .pathBuilder()
-                .addPath(new BezierLine(new Pose(33.5, 86.0), new Pose(34.5, 86.0)))
+        Path5 = follower.pathBuilder()
+                .addPath(new BezierLine(new Pose(39.0, 36.0), new Pose(34.0, 36.0)))
                 .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
                 .build();
 
-        // Path6: (107.5, 82, 0°) -> (120, 82, 0°)
-        // MIRRORED: (36.5, 82, 180°) -> (24, 82, 180°)
-        Path6 = follower
-                .pathBuilder()
-                .addPath(new BezierLine(new Pose(34.5, 86.0), new Pose(22.0, 86.0)))
+        Path6 = follower.pathBuilder()
+                .addPath(new BezierLine(new Pose(34.0, 36.0), new Pose(36.0, 36.0)))
                 .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
                 .build();
 
-        // Path7: (120, 82, 0°) -> (90, 90, 45°)
-        // MIRRORED: (24, 82, 180°) -> (54, 90, 135°)
-        Path7 = follower
-                .pathBuilder()
-                .addPath(new BezierLine(new Pose(22.0, 86.0), new Pose(54.0, 90.0)))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(135))
-                .build();
-
-        // Path8: (90, 90, 45°) -> curve via (80, 58) -> (95, 58, 0°)
-        // MIRRORED: (54, 90, 135°) -> curve via (64, 58) -> (49, 58, 180°)
-        Path8 = follower
-                .pathBuilder()
-                .addPath(new BezierCurve(
-                        new Pose(54.0, 90.0),
-                        new Pose(64.0, 61),
-                        new Pose(47.0, 61)
-                ))
-                .setLinearHeadingInterpolation(Math.toRadians(135), Math.toRadians(180))
-                .build();
-
-        // Path9: (95, 58, 0°) -> (104, 58, 0°)
-        // MIRRORED: (49, 58, 180°) -> (40, 58, 180°)
-        Path9 = follower
-                .pathBuilder()
-                .addPath(new BezierLine(new Pose(47.0, 61), new Pose(38.0, 61)))
+        Path7 = follower.pathBuilder()
+                .addPath(new BezierLine(new Pose(36.0, 36.0), new Pose(18.0, 36.0)))
                 .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
                 .build();
 
-        // Path10: (104, 58, 0°) -> (108.5, 58, 0°)
-        // MIRRORED: (40, 58, 180°) -> (35.5, 58, 180°)
-        Path10 = follower
-                .pathBuilder()
-                .addPath(new BezierLine(new Pose(38.0, 61), new Pose(33.5, 61)))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
+        Path8 = follower.pathBuilder()
+                .addPath(new BezierLine(new Pose(18.0, 36.0), new Pose(56.5, 13.0)))
+                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(112.5))
                 .build();
 
-        // Path11: (108.5, 58, 0°) -> (107.5, 58, 0°)
-        // MIRRORED: (35.5, 58, 180°) -> (36.5, 58, 180°)
-        Path11 = follower
-                .pathBuilder()
-                .addPath(new BezierLine(new Pose(33.5, 61), new Pose(34.5, 61)))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
-                .build();
-
-        // Path12: (107.5, 58, 0°) -> (120, 58, 0°)
-        // MIRRORED: (36.5, 58, 180°) -> (24, 58, 180°)
-        Path12 = follower
-                .pathBuilder()
-                .addPath(new BezierLine(new Pose(34.5, 61), new Pose(22.0, 61)))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
-                .build();
-
-        // Path13: (120, 58, 0°) -> (90, 90, 45°)
-        // MIRRORED: (24, 58, 180°) -> (54, 90, 135°)
-        Path13 = follower
-                .pathBuilder()
-                .addPath(new BezierLine(new Pose(22.0, 61), new Pose(54.0, 90.0)))
-                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(135))
-                .build();
-
-        // Path14: (90, 90, 45°) -> (100, 75, 45°)
-        // MIRRORED: (54, 90, 135°) -> (44, 75, 135°)
-        Path14 = follower
-                .pathBuilder()
-                .addPath(new BezierLine(new Pose(54.0, 90.0), new Pose(44.0, 75.0)))
-                .setLinearHeadingInterpolation(Math.toRadians(135), Math.toRadians(135))
+        Path9 = follower.pathBuilder()
+                .addPath(new BezierLine(new Pose(56.5, 13.0), new Pose(51.5, 23)))
+                .setLinearHeadingInterpolation(Math.toRadians(112.5), Math.toRadians(112.5))
                 .build();
     }
 
@@ -334,17 +264,18 @@ public class MirroredPathAuton extends OpMode {
 
     public int autonomousPathUpdate() {
         switch (pathState) {
-            case 0:
+            case 0: // Path 1
                 if (!follower.isBusy()) {
-                    pathState = 100;
+                    // Start spinning up flywheel BEFORE entering shooting sequence
+                    targetRPM = SHOOTING_RPM;
                     pathTimer.reset();
+                    pathState = 100;
                 }
                 break;
 
-            case 100:
-                if (pathTimer.seconds() < SPINUP_TIME) {
-                    targetRPM = SHOOTING_RPM;
-                } else {
+            // === FIRST SHOOTING SEQUENCE (after Path 1) ===
+            case 100: // Spinup wait - needs full spinup from idle
+                if (pathTimer.seconds() >= FIRST_SPINUP_TIME) {
                     toggleShootingMode();
                     pathTimer.reset();
                     pathState++;
@@ -429,7 +360,7 @@ public class MirroredPathAuton extends OpMode {
             case 110:
                 if (pathTimer.seconds() >= SERVO_RETRACT_DELAY) {
                     toggleShootingMode();
-                    targetRPM = IDLE_RPM;
+                    // Keep flywheel at shooting RPM for next sequence
                     pathTimer.reset();
                     pathState++;
                 }
@@ -442,7 +373,8 @@ public class MirroredPathAuton extends OpMode {
                 }
                 break;
 
-            case 1:
+            // === INTAKE PATHS 2-8 ===
+            case 1: // Path 2
                 if (!follower.isBusy()) {
                     startIntake();
                     follower.followPath(Path3);
@@ -450,18 +382,18 @@ public class MirroredPathAuton extends OpMode {
                 }
                 break;
 
-            case 2:
+            case 2: // Path 3 (Intake running)
                 if (!follower.isBusy()) {
                     manualSorterMode = true;
                     currentChamber = nextChamber(currentChamber);
-                    int target = getChamberPosition(currentChamber, false);
-                    startSorterMove(target);
+                    int target3 = getChamberPosition(currentChamber, false);
+                    startSorterMove(target3);
                     pathTimer.reset();
                     pathState++;
                 }
                 break;
 
-            case 3:
+            case 3: // Wait for sorter
                 if (pathTimer.seconds() >= SORTER_WAIT_TIME) {
                     manualSorterMode = false;
                     follower.followPath(Path4);
@@ -469,7 +401,14 @@ public class MirroredPathAuton extends OpMode {
                 }
                 break;
 
-            case 4:
+            case 4: // Path 4 (Intake running)
+                if (!follower.isBusy()) {
+                    follower.followPath(Path5);
+                    pathState++;
+                }
+                break;
+
+            case 5: // Path 5 (Intake running)
                 if (!follower.isBusy()) {
                     manualSorterMode = true;
                     currentChamber = nextChamber(currentChamber);
@@ -480,40 +419,52 @@ public class MirroredPathAuton extends OpMode {
                 }
                 break;
 
-            case 5:
+            case 6: // Wait for sorter
                 if (pathTimer.seconds() >= SORTER_WAIT_TIME) {
                     manualSorterMode = false;
-                    follower.followPath(Path5);
-                    pathState++;
-                }
-                break;
-
-            case 6:
-                if (!follower.isBusy()) {
                     follower.followPath(Path6);
                     pathState++;
                 }
                 break;
 
-            case 7:
+            case 7: // Path 6 (Intake running)
                 if (!follower.isBusy()) {
-                    stopIntake();
                     follower.followPath(Path7);
                     pathState++;
                 }
                 break;
 
-            case 8:
+            case 8: // Path 7 (Intake running)
                 if (!follower.isBusy()) {
-                    pathState = 200;
+                    stopIntake();
+                    manualSorterMode = true;
+                    currentChamber = nextChamber(currentChamber);
+                    int target7 = getChamberPosition(currentChamber, false);
+                    startSorterMove(target7);
                     pathTimer.reset();
+                    pathState++;
                 }
                 break;
 
-            case 200:
-                if (pathTimer.seconds() < SPINUP_TIME) {
-                    targetRPM = SHOOTING_RPM;
-                } else {
+            case 9: // Wait for sorter
+                if (pathTimer.seconds() >= SORTER_WAIT_TIME) {
+                    manualSorterMode = false;
+                    follower.followPath(Path8);
+                    pathState++;
+                }
+                break;
+
+            case 10: // Path 8
+                if (!follower.isBusy()) {
+                    // Flywheel already at shooting RPM, just need quick verification
+                    pathTimer.reset();
+                    pathState = 200;
+                }
+                break;
+
+            // === SECOND SHOOTING SEQUENCE (after Path 8) ===
+            case 200: // Quick spinup verification - already at shooting RPM
+                if (pathTimer.seconds() >= QUICK_SPINUP_TIME) {
                     toggleShootingMode();
                     pathTimer.reset();
                     pathState++;
@@ -606,187 +557,20 @@ public class MirroredPathAuton extends OpMode {
 
             case 211:
                 if (pathTimer.seconds() >= MODE_TOGGLE_WAIT_TIME) {
-                    follower.followPath(Path8);
-                    pathState = 9;
-                }
-                break;
-
-            case 9:
-                if (!follower.isBusy()) {
-                    startIntake();
                     follower.followPath(Path9);
-                    pathState++;
+                    pathState = 11;
                 }
                 break;
 
-            case 10:
+            case 11: // Path 9 - Final path
                 if (!follower.isBusy()) {
-                    manualSorterMode = true;
-                    currentChamber = nextChamber(currentChamber);
-                    int target10 = getChamberPosition(currentChamber, false);
-                    startSorterMove(target10);
-                    pathTimer.reset();
-                    pathState++;
-                }
-                break;
-
-            case 11:
-                if (pathTimer.seconds() >= SORTER_WAIT_TIME) {
-                    manualSorterMode = false;
-                    follower.followPath(Path10);
-                    pathState++;
-                }
-                break;
-
-            case 12:
-                if (!follower.isBusy()) {
-                    manualSorterMode = true;
-                    currentChamber = nextChamber(currentChamber);
-                    int target12 = getChamberPosition(currentChamber, false);
-                    startSorterMove(target12);
-                    pathTimer.reset();
-                    pathState++;
-                }
-                break;
-
-            case 13:
-                if (pathTimer.seconds() >= SORTER_WAIT_TIME) {
-                    manualSorterMode = false;
-                    follower.followPath(Path11);
-                    pathState++;
-                }
-                break;
-
-            case 14:
-                if (!follower.isBusy()) {
-                    follower.followPath(Path12);
-                    pathState++;
-                }
-                break;
-
-            case 15:
-                if (!follower.isBusy()) {
-                    stopIntake();
-                    follower.followPath(Path13);
-                    pathState++;
-                }
-                break;
-
-            case 16:
-                if (!follower.isBusy()) {
-                    pathState = 300;
-                    pathTimer.reset();
-                }
-                break;
-
-            case 300:
-                if (pathTimer.seconds() < SPINUP_TIME) {
-                    targetRPM = SHOOTING_RPM;
-                } else {
-                    toggleShootingMode();
-                    pathTimer.reset();
-                    pathState++;
-                }
-                break;
-
-            case 301:
-                if (pathTimer.seconds() >= MODE_TOGGLE_WAIT_TIME) {
-                    rotateSorter();
-                    pathTimer.reset();
-                    pathState++;
-                }
-                break;
-
-            case 302:
-                if (pathTimer.seconds() >= SORTER_WAIT_TIME) {
-                    activateShooter();
-                    pathTimer.reset();
-                    pathState++;
-                }
-                break;
-
-            case 303:
-                if (pathTimer.seconds() >= SHOOT_DURATION) {
-                    deactivateShooter();
-                    shotsComplete++;
-                    pathTimer.reset();
-                    pathState++;
-                }
-                break;
-
-            case 304:
-                if (pathTimer.seconds() >= SERVO_RETRACT_DELAY) {
-                    rotateSorter();
-                    pathTimer.reset();
-                    pathState++;
-                }
-                break;
-
-            case 305:
-                if (pathTimer.seconds() >= SORTER_WAIT_TIME) {
-                    activateShooter();
-                    pathTimer.reset();
-                    pathState++;
-                }
-                break;
-
-            case 306:
-                if (pathTimer.seconds() >= SHOOT_DURATION) {
-                    deactivateShooter();
-                    shotsComplete++;
-                    pathTimer.reset();
-                    pathState++;
-                }
-                break;
-
-            case 307:
-                if (pathTimer.seconds() >= SERVO_RETRACT_DELAY) {
-                    rotateSorter();
-                    pathTimer.reset();
-                    pathState++;
-                }
-                break;
-
-            case 308:
-                if (pathTimer.seconds() >= SORTER_WAIT_TIME) {
-                    activateShooter();
-                    pathTimer.reset();
-                    pathState++;
-                }
-                break;
-
-            case 309:
-                if (pathTimer.seconds() >= SHOOT_DURATION) {
-                    deactivateShooter();
-                    shotsComplete++;
-                    pathTimer.reset();
-                    pathState++;
-                }
-                break;
-
-            case 310:
-                if (pathTimer.seconds() >= SERVO_RETRACT_DELAY) {
-                    toggleShootingMode();
+                    // All paths complete - stop everything
                     targetRPM = 0;
-                    pathTimer.reset();
-                    pathState++;
-                }
-                break;
-
-            case 311:
-                if (pathTimer.seconds() >= MODE_TOGGLE_WAIT_TIME) {
-                    follower.followPath(Path14);
-                    pathState++;
-                }
-                break;
-
-            case 312:
-                if (!follower.isBusy()) {
                     pathState = 999;
                 }
                 break;
 
-            case 999:
+            case 999: // Finished
                 break;
         }
 
@@ -802,6 +586,8 @@ public class MirroredPathAuton extends OpMode {
         s2.setPosition(0.68);
         s3.setPower(0);
     }
+
+    // === Shooting Helper Methods ===
 
     private void toggleShootingMode() {
         shootingMode = !shootingMode;
@@ -824,6 +610,8 @@ public class MirroredPathAuton extends OpMode {
         s2.setPosition(0.68);
         s3.setPower(0.0);
     }
+
+    // === Flywheel PID ===
 
     private void updateFlywheelPID() {
         double currentVelocity = m3.getVelocity();
@@ -848,6 +636,8 @@ public class MirroredPathAuton extends OpMode {
         flywheelLastError = error;
         flywheelLastTime = currentTime;
     }
+
+    // === Sorter Helper Methods ===
 
     private void updateSorterMovement() {
         if (!sorterMoving) return;
@@ -1005,6 +795,8 @@ public class MirroredPathAuton extends OpMode {
         }
         return error;
     }
+
+    // === Intake Control Methods ===
 
     private void startIntake() {
         intakeRunning = true;
