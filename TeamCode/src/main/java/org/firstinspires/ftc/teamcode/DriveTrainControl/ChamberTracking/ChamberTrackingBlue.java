@@ -113,6 +113,7 @@ public class ChamberTrackingBlue extends OpMode {
     private static final int CHAMBER_0_POS = 0;           // Chamber 0 at 0 degrees
     private static final int CHAMBER_1_POS = SLOT;        // Chamber 1 at 120 degrees
     private static final int CHAMBER_2_POS = 2 * SLOT;    // Chamber 2 at 240 degrees
+    private ChamberSortingOperations CSO = new ChamberSortingOperations();
 
     // === Chamber State Tracking ===
     private boolean[] chamberFull = new boolean[3];  // Tracks which chambers contain a ball
@@ -429,7 +430,7 @@ public class ChamberTrackingBlue extends OpMode {
         boolean dpadRightPressed = gamepad1.dpad_right;
         if (dpadRightPressed && !lastDpadRight) {
             currentChamber = nextChamber(currentChamber);  // Get next chamber (0→2→1→0)
-
+            chamberColors = CSO.rotateClockwise(chamberColors);
             // Calculate target position for new current chamber
             int targetPos = getChamberPosition(currentChamber, shootingMode);
             startSorterMove(targetPos);
@@ -487,14 +488,51 @@ public class ChamberTrackingBlue extends OpMode {
         // FLYWHEEL RPM MODE SELECTION
         // ====================================================================
 
-        // X button toggles between distance-based and manual RPM modes
+        // ====================================================================
+        // X BUTTON: ROTATE TO GREEN BALL (SHOOTING MODE ONLY)
+        // ====================================================================
+
+        // X button finds and rotates to green ball in shooting mode
         boolean xPressed = gamepad1.x;
-        if (xPressed && !lastXButton) {
-            distanceBasedRPM = !distanceBasedRPM;
+        if (xPressed && !lastXButton && shootingMode) {
+            // Find which chamber (A, B, or C) has the green ball
+            int greenIndex = CSO.indexOfColor(chamberColors, "GREEN", true);
+
+            if (greenIndex != -1) {  // Found a green ball (or next best if no green)
+                // Calculate how many rotations needed to bring that chamber to position A
+                int rotationsNeeded = 0;
+
+                if (greenIndex == 0) {
+                    // Green is already in A, no rotation needed
+                    rotationsNeeded = 0;
+                } else if (greenIndex == 1) {
+                    // Green is in B, need to rotate CCW once to make B→A
+                    rotationsNeeded = -1;  // Negative = counter-clockwise
+                } else if (greenIndex == 2) {
+                    // Green is in C, need to rotate CW once to make C→A
+                    // OR rotate CCW twice (but CW is shorter)
+                    rotationsNeeded = 1;  // Positive = clockwise
+                }
+
+                // Apply the rotations to the array
+                for (int i = 0; i < Math.abs(rotationsNeeded); i++) {
+                    if (rotationsNeeded > 0) {
+                        chamberColors = CSO.rotateClockwise(chamberColors);
+                        currentChamber = prevChamber(currentChamber); // CW rotation = prev chamber
+                    } else if (rotationsNeeded < 0) {
+                        chamberColors = CSO.rotateCounterClockwise(chamberColors);
+                        currentChamber = nextChamber(currentChamber); // CCW rotation = next chamber
+                    }
+                }
+
+                // Calculate the new target position in shooting mode
+                int targetPos = getChamberPosition(currentChamber, shootingMode);
+                startSorterMove(targetPos);
+            }
         }
         lastXButton = xPressed;
 
-        // === Right Bumper: Set Target RPM ===
+        // === NOT FUNCTIONAL RIGHT NOW (removed X-button toggling between modes): Right Bumper: Set Target RPM ===
         if (gamepad1.right_bumper && !lastRightBumper) {
             if (distanceBasedRPM) {
                 // AUTO MODE: Choose RPM based on distance to goal
@@ -793,7 +831,7 @@ public class ChamberTrackingBlue extends OpMode {
 
     /**
      * Calculates the encoder position for a given chamber
-     * In shooting mode, adds 60-degree offset to align chamber with shooter
+     * In shooting mode, adds 180-degree offset to align chamber A with shooter
      *
      * @param chamber Which chamber (0, 1, or 2)
      * @param shooting Whether in shooting mode (true) or intake mode (false)
@@ -847,6 +885,7 @@ public class ChamberTrackingBlue extends OpMode {
             // Only fill chamber if it's not already full
             if (!chamberFull[currentChamber]) {
                 chamberFull[currentChamber] = true;           // Mark chamber as full
+                chamberColors[0] = detected;                  // Mark chamber A color (at intake position)
                 currentChamber = nextChamber(currentChamber); // Move to next chamber
 
                 // Rotate sorter to position next empty chamber at intake
@@ -895,6 +934,7 @@ public class ChamberTrackingBlue extends OpMode {
         // No ball detected continuously for required time - chamber is empty
         if (System.currentTimeMillis() - emptyStartTime >= EMPTY_DETECT_TIME_MS) {
             chamberFull[currentChamber] = false;  // Mark chamber as empty
+            chamberColors[0] = "NONE";           // Mark chamber A color (at shooter position)
             emptyDetectionActive = false;
             emptyStartTime = 0;
         }
@@ -969,7 +1009,19 @@ public class ChamberTrackingBlue extends OpMode {
         if (c == 0) return 2;
         return 1;  // c == 2, return 1
     }
-
+    /**
+     * Gets the previous chamber in the nextChamber sequence
+     * Since nextChamber goes: 0→2→1→0
+     * prevChamber goes backwards: 0→1→2→0
+     *
+     * @param c Current chamber (0, 1, or 2)
+     * @return Previous chamber
+     */
+    private int prevChamber(int c) {
+        if (c == 0) return 1;  // Backwards from 0 is 1
+        if (c == 1) return 2;  // Backwards from 1 is 2
+        return 0;              // c == 2, backwards is 0
+    }
     // ========================================================================
     // ENCODER POSITION NORMALIZATION
     // ========================================================================
@@ -1041,9 +1093,10 @@ public class ChamberTrackingBlue extends OpMode {
         telemetry.addData("Moving", sorterMoving);              // Is sorter moving?
 
         // Chamber status: O = full, X = empty
-        String ch1 = chamberFull[0] ? "O" : "X";
-        String ch2 = chamberFull[1] ? "O" : "X";
-        String ch3 = chamberFull[2] ? "O" : "X";
+
+        String ch1 = chamberFull[0] ? chamberColors[0] : "X";
+        String ch2 = chamberFull[1] ? chamberColors[1] : "X";
+        String ch3 = chamberFull[2] ? chamberColors[2] : "X";
         telemetry.addData("Ch1/2/3", ch1 + "/" + ch2 + "/" + ch3);
 
         telemetry.addData("Mode", shootingMode ? "SHOOT (Y)" : "INTAKE (Y)");
@@ -1132,6 +1185,27 @@ public class ChamberTrackingBlue extends OpMode {
         private String[] rotateCounterClockwise (String[] sorter) {
             String[] out = {sorter[1], sorter[2], sorter[0]};
             return out;
+        }
+
+        /**
+         * Finds the index of chamber with ball of desired color, based on A (0), B (1), or C (2)
+         * If no chamber has the desired ball color, returns -1
+         * bool returnNextBest: returns the next best chamber if desired color is not found
+         */
+        private int indexOfColor (String[] chamberColors, String desiredColor, boolean returnNextBest) {
+            for (int i = 0; i <= 2; i++) {
+                if (chamberColors[i].equals(desiredColor)){
+                    return i;
+                }
+            }
+            if (returnNextBest) {
+                for (int i = 0; i<= 2; i++) {
+                    if (!chamberColors[i].equals("NONE")) {
+                        return i;
+                    }
+                }
+            }
+            return -1;
         }
     }
 
