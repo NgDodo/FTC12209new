@@ -113,7 +113,6 @@ public class ChamberTrackingBlue extends OpMode {
     private static final int CHAMBER_0_POS = 0;           // Chamber 0 at 0 degrees
     private static final int CHAMBER_1_POS = SLOT;        // Chamber 1 at 120 degrees
     private static final int CHAMBER_2_POS = 2 * SLOT;    // Chamber 2 at 240 degrees
-    private ChamberSortingOperations CSO = new ChamberSortingOperations();
 
     // === Chamber State Tracking ===
     private boolean[] chamberFull = new boolean[3];  // Tracks which chambers contain a ball
@@ -430,7 +429,7 @@ public class ChamberTrackingBlue extends OpMode {
         boolean dpadRightPressed = gamepad1.dpad_right;
         if (dpadRightPressed && !lastDpadRight) {
             currentChamber = nextChamber(currentChamber);  // Get next chamber (0→2→1→0)
-            chamberColors = CSO.rotateClockwise(chamberColors);
+            rotateChamberColorsClockwise(); // rotates chamberColors[] clockwise when rotating chamber
             // Calculate target position for new current chamber
             int targetPos = getChamberPosition(currentChamber, shootingMode);
             startSorterMove(targetPos);
@@ -496,7 +495,7 @@ public class ChamberTrackingBlue extends OpMode {
         boolean xPressed = gamepad1.x;
         if (xPressed && !lastXButton && shootingMode) {
             // Find which chamber (A, B, or C) has the green ball
-            int greenIndex = CSO.indexOfColor(chamberColors, "GREEN", true);
+            int greenIndex = indexOfColor(chamberColors, "GREEN", true);
 
             if (greenIndex != -1) {  // Found a green ball (or next best if no green)
                 // Calculate how many rotations needed to bring that chamber to position A
@@ -517,10 +516,10 @@ public class ChamberTrackingBlue extends OpMode {
                 // Apply the rotations to the array
                 for (int i = 0; i < Math.abs(rotationsNeeded); i++) {
                     if (rotationsNeeded > 0) {
-                        chamberColors = CSO.rotateClockwise(chamberColors);
+                        rotateChamberColorsClockwise(); // rotates chamberColors[] clockwise
                         currentChamber = prevChamber(currentChamber); // CW rotation = prev chamber
                     } else if (rotationsNeeded < 0) {
-                        chamberColors = CSO.rotateCounterClockwise(chamberColors);
+                        rotateChamberColorsCounterClockwise(); // rotates chamberColors[] counterclockwise
                         currentChamber = nextChamber(currentChamber); // CCW rotation = next chamber
                     }
                 }
@@ -1168,46 +1167,49 @@ public class ChamberTrackingBlue extends OpMode {
      * Currently unused - was intended for tracking ball colors as chambers rotate
      * Kept for potential future implementation
      */
-    private static class ChamberSortingOperations {
-        /**
-         * Rotates chamber array clockwise
-         * Example: [A, B, C] → [C, A, B]
-         */
-        private String[] rotateClockwise (String[] sorter) {
-            String[] out = {sorter[2], sorter[0], sorter[1]};
-            return out;
-        }
+    /**
+     * Rotates chamber array clockwise
+     * Example: [A, B, C] → [C, A, B]
+     */
+    private void rotateChamberColorsClockwise () {
+        String[] out = {chamberColors[0], chamberColors[1], chamberColors[2]};
+        chamberColors[0] = out[2];
+        chamberColors[1] = out[0];
+        chamberColors[2] = out[1];
+    }
 
-        /**
-         * Rotates chamber array counter-clockwise
-         * Example: [A, B, C] → [B, C, A]
-         */
-        private String[] rotateCounterClockwise (String[] sorter) {
-            String[] out = {sorter[1], sorter[2], sorter[0]};
-            return out;
-        }
+    /**
+     * Rotates chamber array counter-clockwise
+     * Example: [A, B, C] → [B, C, A]
+     */
+    private void rotateChamberColorsCounterClockwise () {
+        String[] out = {chamberColors[0], chamberColors[1], chamberColors[2]};
+        chamberColors[0] = out[1];
+        chamberColors[1] = out[2];
+        chamberColors[2] = out[0];
+    }
 
-        /**
-         * Finds the index of chamber with ball of desired color, based on A (0), B (1), or C (2)
-         * If no chamber has the desired ball color, returns -1
-         * bool returnNextBest: returns the next best chamber if desired color is not found
-         */
-        private int indexOfColor (String[] chamberColors, String desiredColor, boolean returnNextBest) {
-            for (int i = 0; i <= 2; i++) {
-                if (chamberColors[i].equals(desiredColor)){
+    /**
+     * Finds the index of chamber with ball of desired color, based on A (0), B (1), or C (2)
+     * If no chamber has the desired ball color, returns -1
+     * bool returnNextBest: returns the next best chamber if desired color is not found
+     */
+    private int indexOfColor (String[] chamberColors, String desiredColor, boolean returnNextBest) {
+        for (int i = 0; i <= 2; i++) {
+            if (chamberColors[i].equals(desiredColor)){
+                return i;
+            }
+        }
+        if (returnNextBest) {
+            for (int i = 0; i<= 2; i++) {
+                if (!chamberColors[i].equals("NONE")) {
                     return i;
                 }
             }
-            if (returnNextBest) {
-                for (int i = 0; i<= 2; i++) {
-                    if (!chamberColors[i].equals("NONE")) {
-                        return i;
-                    }
-                }
-            }
-            return -1;
         }
+        return -1;
     }
+
 
     // ========================================================================
     // UTILITY FUNCTIONS
