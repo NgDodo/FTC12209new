@@ -510,17 +510,17 @@ public class ChamberTrackingBlue extends OpMode {
                 } else if (greenIndex == 2) {
                     // Green is in C, need to rotate CW once to make C→A
                     // OR rotate CCW twice (but CW is shorter)
-                    rotationsNeeded = 1;  // Positive = clockwise
+                    rotationsNeeded = -2;  // Positive = clockwise
                 }
 
                 // Apply the rotations to the array
                 for (int i = 0; i < Math.abs(rotationsNeeded); i++) {
                     if (rotationsNeeded > 0) {
                         rotateChamberColorsClockwise(); // rotates chamberColors[] clockwise
-                        currentChamber = prevChamber(currentChamber); // CW rotation = prev chamber
+                        currentChamber = nextChamber(currentChamber); // CW rotation = prev chamber
                     } else if (rotationsNeeded < 0) {
                         rotateChamberColorsCounterClockwise(); // rotates chamberColors[] counterclockwise
-                        currentChamber = nextChamber(currentChamber); // CCW rotation = next chamber
+                        currentChamber = prevChamber(currentChamber); // CCW rotation = next chamber
                     }
                 }
 
@@ -885,6 +885,7 @@ public class ChamberTrackingBlue extends OpMode {
             if (!chamberFull[currentChamber]) {
                 chamberFull[currentChamber] = true;           // Mark chamber as full
                 chamberColors[0] = detected;                  // Mark chamber A color (at intake position)
+                rotateChamberColorsClockwise();
                 currentChamber = nextChamber(currentChamber); // Move to next chamber
 
                 // Rotate sorter to position next empty chamber at intake
@@ -1096,7 +1097,7 @@ public class ChamberTrackingBlue extends OpMode {
         String ch1 = chamberFull[0] ? chamberColors[0] : "X";
         String ch2 = chamberFull[1] ? chamberColors[1] : "X";
         String ch3 = chamberFull[2] ? chamberColors[2] : "X";
-        telemetry.addData("Ch1/2/3", ch1 + "/" + ch2 + "/" + ch3);
+        telemetry.addData("Ch1/2/3", chamberColors[0] + "/" + chamberColors[1] + "/" + chamberColors[2]);
 
         telemetry.addData("Mode", shootingMode ? "SHOOT (Y)" : "INTAKE (Y)");
         telemetry.addData("Color", shooterColorDetected);       // Color at shooter
