@@ -94,7 +94,7 @@ public class AutoShootTurretTest extends OpMode {
     private static final long EMPTY_DETECT_TIME_MS = 200;
 
     // === Shooter presets ===
-    private final int[] rpmPresets = {2700, 3300};
+    private final int[] rpmPresets = {2600, 3300};
     private int presetIndex = -1;
     private double targetRPM = 0;
     private boolean lastRightBumper = false;
@@ -122,7 +122,7 @@ public class AutoShootTurretTest extends OpMode {
 
     // Auto shoot timing constants (from autonomous)
     private static final double SHOOT_DURATION = 0.3;
-    private static final double SERVO_RETRACT_DELAY = 0.4;
+    private static final double SERVO_RETRACT_DELAY = 0.2;
     private static final double SORTER_WAIT_TIME = 0.15;
     private static final double MODE_TOGGLE_WAIT_TIME = 0.75;
     private int shotsComplete = 0;
@@ -255,60 +255,59 @@ public class AutoShootTurretTest extends OpMode {
         // === Turret Tracking Logic ===
         if (currentTrackingMode == TrackingMode.LIMELIGHT_AND_ODOMETRY) {
             Pose GOAL_POST = new Pose(10, 134, 0);
-            boolean limelightTracking = false;
+            boolean LimelightTracking = false;
 
-            // Try LimeLight tracking first (if AprilTag in view)
+            // IF apriltag in view, do LimeLight tracking.
             LLResult result = limelight.getLatestResult();
             if (result != null && result.isValid()) {
                 List<LLResultTypes.FiducialResult> fiducials = result.getFiducialResults();
+                LLResultTypes.FiducialResult validTarget = null;
                 for (LLResultTypes.FiducialResult fiducial : fiducials) {
                     if (fiducial.getFiducialId() == 20) {
-                        limelightTracking = true;
-                        double bearing = fiducial.getTargetXDegrees();
+                        telemetry.addData("Found Tag: ", fiducial.getFiducialId());
+                        validTarget = fiducial;
+                        LimelightTracking = true;
+                        double bearing = validTarget.getTargetXDegrees();
                         double turretRotatePower = 0.067 * bearing / 20.0;
 
                         if (Math.abs(bearing) > 2) {
                             m2.setPower(turretRotatePower);
+                            telemetry.addLine("===TURRET ALIGNED===");
                         } else {
                             m2.setPower(0);
                         }
-
-                        telemetry.addData("Tracking Mode", "LIMELIGHT");
-                        telemetry.addData("AprilTag ID", fiducial.getFiducialId());
-                        telemetry.addData("Bearing", "%.2f°", bearing);
-                        telemetry.addData("Turret Power", "%.3f", turretRotatePower);
-                        break;
+                        telemetry.addData("Bearing: ", bearing);
+                        telemetry.addData("Turret Rotate Power: ", turretRotatePower);
                     }
                 }
             }
 
-            // Fall back to odometry tracking if no AprilTag
-            if (!limelightTracking) {
-                // Calculate component distances from goal
+            // ELSE IF apriltag NOT in view, do odometry position tracking.
+            if (LimelightTracking == false) {
+                // 1. Calculate component distances from goal
                 double y_goal_distance = follower.getPose().getY() - GOAL_POST.getY();
                 double x_goal_distance = follower.getPose().getX() - GOAL_POST.getX();
 
-                // Calculate absolute angle to goal in field coordinates
+                // 2. Calculate absolute angle to goal in field coordinates
                 double angle_to_goal = Math.atan2(y_goal_distance, x_goal_distance);
 
-                // Calculate turret offset relative to robot heading
+                // 3. Calculate turret offset relative to robot heading
+                // Normalize the angle difference to [-PI, PI]
                 double turretDesiredRelativeOffset = normalizeAngle(-angle_to_goal + follower.getHeading() + Math.PI);
 
-                // Move turret to track the goal
+                // 4. Move turret to track the goal
                 double error = moveTurretToOffset(m2, turretDesiredRelativeOffset);
 
-                telemetry.addData("Tracking Mode", "ODOMETRY");
                 telemetry.addData("Angle to Goal", "%.1f°", Math.toDegrees(angle_to_goal));
-                telemetry.addData("Turret Offset", "%.1f°", Math.toDegrees(turretDesiredRelativeOffset));
-                telemetry.addData("Turret Error (rot)", "%.3f", error);
+                telemetry.addData("Rotations to Goal", "%.2f", Math.toDegrees(angle_to_goal) / 360.0);
+                telemetry.addData("Turret Relative Offset", "%.1f°", Math.toDegrees(turretDesiredRelativeOffset));
+                telemetry.addData("Turret Rotations Error", error);
+                telemetry.addData("Turret Rotations", "%.2f", m2.getCurrentPosition() / TICKS_PER_REV);
             }
         } else {
             // Tracking OFF - hold position
             m2.setPower(0);
-            telemetry.addData("Tracking Mode", "OFF");
         }
-
-        telemetry.addData("Turret Position", "%.2f rot", m2.getCurrentPosition() / TICKS_PER_REV);
 
         // === Sorter ===
         int rawPos = backRightMotor.getCurrentPosition();
