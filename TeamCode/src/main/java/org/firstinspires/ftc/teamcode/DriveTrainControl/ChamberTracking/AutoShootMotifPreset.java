@@ -21,7 +21,7 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 import java.util.List;
 
-@TeleOp(name = "Auto Shoot + Turret Tracking Test", group = "Test")
+@TeleOp(name = "Auto Shoot Motif Preset + Turret Tracking Test", group = "Test")
 public class AutoShootMotifPreset extends OpMode {
     // === Drive Train & Mechanisms ===
     DcMotorEx frontLeftMotor, backLeftMotor, frontRightMotor, backRightMotor;
@@ -121,7 +121,7 @@ public class AutoShootMotifPreset extends OpMode {
     private boolean lastAButton = false;
 
     // Auto shoot timing constants (from autonomous)
-    private static final double SHOOT_DURATION = 0.3;
+    private static final double SHOOT_DURATION = 0.45;
     private static final double SERVO_RETRACT_DELAY = 0.2;
     private static final double SORTER_WAIT_TIME = 0.15;
     private static final double MODE_TOGGLE_WAIT_TIME = 0.75;
@@ -352,12 +352,60 @@ public class AutoShootMotifPreset extends OpMode {
             shootingMode = !shootingMode;
             int targetPos = getChamberPosition(currentChamber, shootingMode);
             startSorterMove(targetPos);
+
+            // Find which chamber (A, B, or C) has the green ball
+            int greenIndex = indexOfColor(chamberColors, "GREEN", true);
+
+            // Figure out how much extra to turn chamber, based on motif
+            int rotationCompensateForMotif = 0;
+            if (currentMotif.equals(MOTIF.GPP)) {
+                rotationCompensateForMotif = -1;
+            }
+            if (currentMotif.equals(MOTIF.PGP)) {
+                rotationCompensateForMotif = 0;
+            }
+            if (currentMotif.equals(MOTIF.PPG)) {
+                rotationCompensateForMotif = 1;
+            }
+
+            if (greenIndex != -1) {  // Found a green ball (or next best if no green)
+                // Calculate how many rotations needed to bring that chamber to position A
+                int rotationsNeeded = 0 + rotationCompensateForMotif;
+
+                if (greenIndex == 0) {
+                    // Green is already in A, no rotation needed
+                    rotationsNeeded = 0 + rotationCompensateForMotif;
+                } else if (greenIndex == 1) {
+                    // Green is in B, need to rotate CCW once to make B→A
+                    rotationsNeeded = -1 + rotationCompensateForMotif;  // Negative = counter-clockwise
+                } else if (greenIndex == 2) {
+                    // Green is in C, need to rotate CW once to make C→A
+                    // OR rotate CCW twice (but CW is shorter)
+                    rotationsNeeded = -2 + rotationCompensateForMotif;  // Positive = clockwise
+                }
+
+                // Apply the rotations to the array
+                for (int i = 0; i < Math.abs(rotationsNeeded); i++) {
+                    if (rotationsNeeded > 0) {
+                        rotateChamberColorsClockwise(); // rotates chamberColors[] clockwise
+                        currentChamber = nextChamber(currentChamber); // CW rotation = prev chamber
+                    } else if (rotationsNeeded < 0) {
+                        rotateChamberColorsCounterClockwise(); // rotates chamberColors[] counterclockwise
+                        currentChamber = prevChamber(currentChamber); // CCW rotation = next chamber
+                    }
+                }
+
+                // Calculate the new target position in shooting mode
+                targetPos = getChamberPosition(currentChamber, shootingMode);
+                startSorterMove(targetPos);
+            }
         }
         lastY = yPressed;
 
         boolean dpadRightPressed = gamepad1.dpad_right;
         if (dpadRightPressed && !lastDpadRight && !autoShootActive) {
             currentChamber = nextChamber(currentChamber);
+            rotateChamberColorsClockwise();
             int targetPos = getChamberPosition(currentChamber, shootingMode);
             startSorterMove(targetPos);
         }
@@ -365,12 +413,20 @@ public class AutoShootMotifPreset extends OpMode {
 
         updateSorterMovement();
 
-        if (!shootingMode && !autoShootActive) {
+        // ====================================================================
+        // COLOR DETECTION
+        // ====================================================================
+
+        // In intake mode: detect when ball enters and fill chamber
+        if (!shootingMode) {
             autoIntakeColorCheck();
-        } else {
+        }
+        // In shooting mode: detect when ball leaves chamber
+        else {
             checkChamberEmpty();
         }
 
+        // Get current color at shooter position and update LED indicator
         String shooterColorDetected = detectShooterColor();
         updateColorLEDs(shooterColorDetected);
 
@@ -394,8 +450,55 @@ public class AutoShootMotifPreset extends OpMode {
             // Make sure we're in shooting mode
             if (!shootingMode) {
                 shootingMode = true;
-                int targetPos = getChamberPosition(currentChamber, shootingMode);
-                startSorterMove(targetPos);
+                // int targetPos = getChamberPosition(currentChamber, shootingMode);
+                // startSorterMove(targetPos);
+
+                // Find which chamber (A, B, or C) has the green ball
+                int greenIndex = indexOfColor(chamberColors, "GREEN", true);
+
+                // Figure out how much extra to turn chamber, based on motif
+                int rotationCompensateForMotif = 0;
+                if (currentMotif.equals(MOTIF.GPP)) {
+                    rotationCompensateForMotif = -1;
+                }
+                if (currentMotif.equals(MOTIF.PGP)) {
+                    rotationCompensateForMotif = 1;
+                }
+                if (currentMotif.equals(MOTIF.PPG)) {
+                    rotationCompensateForMotif = 0;
+                }
+
+                if (greenIndex != -1) {  // Found a green ball (or next best if no green)
+                    // Calculate how many rotations needed to bring that chamber to position A
+                    int rotationsNeeded = 0 + rotationCompensateForMotif;
+
+                    if (greenIndex == 0) {
+                        // Green is already in A, no rotation needed
+                        rotationsNeeded = 0 + rotationCompensateForMotif;
+                    } else if (greenIndex == 1) {
+                        // Green is in B, need to rotate CCW once to make B→A
+                        rotationsNeeded = -1 + rotationCompensateForMotif;  // Negative = counter-clockwise
+                    } else if (greenIndex == 2) {
+                        // Green is in C, need to rotate CW once to make C→A
+                        // OR rotate CCW twice (but CW is shorter)
+                        rotationsNeeded = -2 + rotationCompensateForMotif;  // Positive = clockwise
+                    }
+
+                    // Apply the rotations to the array
+                    for (int i = 0; i < Math.abs(rotationsNeeded); i++) {
+                        if (rotationsNeeded > 0) {
+                            rotateChamberColorsClockwise(); // rotates chamberColors[] clockwise
+                            currentChamber = nextChamber(currentChamber); // CW rotation = prev chamber
+                        } else if (rotationsNeeded < 0) {
+                            rotateChamberColorsCounterClockwise(); // rotates chamberColors[] counterclockwise
+                            currentChamber = prevChamber(currentChamber); // CCW rotation = next chamber
+                        }
+                    }
+
+                    // Calculate the new target position in shooting mode
+                    int targetPos = getChamberPosition(currentChamber, shootingMode);
+                    startSorterMove(targetPos);
+                }
             }
         }
         lastAButton = aPressed;
@@ -413,40 +516,6 @@ public class AutoShootMotifPreset extends OpMode {
         // X button finds and rotates to green ball in shooting mode
         boolean xPressed = gamepad1.x;
         if (xPressed && !lastXButton && shootingMode) {
-            // Find which chamber (A, B, or C) has the green ball
-            int greenIndex = indexOfColor(chamberColors, "GREEN", true);
-
-            if (greenIndex != -1) {  // Found a green ball (or next best if no green)
-                // Calculate how many rotations needed to bring that chamber to position A
-                int rotationsNeeded = 0;
-
-                if (greenIndex == 0) {
-                    // Green is already in A, no rotation needed
-                    rotationsNeeded = 0;
-                } else if (greenIndex == 1) {
-                    // Green is in B, need to rotate CCW once to make B→A
-                    rotationsNeeded = -1;  // Negative = counter-clockwise
-                } else if (greenIndex == 2) {
-                    // Green is in C, need to rotate CW once to make C→A
-                    // OR rotate CCW twice (but CW is shorter)
-                    rotationsNeeded = -2;  // Positive = clockwise
-                }
-
-                // Apply the rotations to the array
-                for (int i = 0; i < Math.abs(rotationsNeeded); i++) {
-                    if (rotationsNeeded > 0) {
-                        rotateChamberColorsClockwise(); // rotates chamberColors[] clockwise
-                        currentChamber = nextChamber(currentChamber); // CW rotation = prev chamber
-                    } else if (rotationsNeeded < 0) {
-                        rotateChamberColorsCounterClockwise(); // rotates chamberColors[] counterclockwise
-                        currentChamber = prevChamber(currentChamber); // CCW rotation = next chamber
-                    }
-                }
-
-                // Calculate the new target position in shooting mode
-                int targetPos = getChamberPosition(currentChamber, shootingMode);
-                startSorterMove(targetPos);
-            }
         }
         lastXButton = xPressed;
 
@@ -466,8 +535,6 @@ public class AutoShootMotifPreset extends OpMode {
             }
         } else if (gamepad1.dpad_down && !lastDpadDown) {
             targetRPM = 0;
-        } else if (gamepad1.dpad_left && !lastDpadLeft) {
-            targetRPM = -4000;
         }
 
         boolean leftBumperPressed = gamepad1.left_bumper;
@@ -477,7 +544,6 @@ public class AutoShootMotifPreset extends OpMode {
 
         lastRightBumper = gamepad1.right_bumper;
         lastLeftBumper = leftBumperPressed;
-        lastDpadLeft = gamepad1.dpad_left;
         lastDpadDown = gamepad1.dpad_down;
 
         // === Flywheel PID Control ===
@@ -505,10 +571,30 @@ public class AutoShootMotifPreset extends OpMode {
 
         updateRPMLED();
 
+        // Update driver station telemetry
+        updateTelemetry(normPos, shooterColorDetected);
+
         // === Pose Reset System ===
         if (gamepad1.dpad_up) {
             follower.setPose(new Pose(72, 72, Math.PI / 2));
         }
+
+        // === Switch through Motif States ===
+
+        if (gamepad1.dpad_left && !lastDpadLeft) {
+            switch (currentMotif) {
+                case GPP:
+                    currentMotif = MOTIF.PGP;
+                    return;
+                case PGP:
+                    currentMotif = MOTIF.PPG;
+                    return;
+                case PPG:
+                    currentMotif = MOTIF.GPP;
+                    return;
+            }
+        }
+        lastDpadLeft = gamepad1.dpad_left;
     }
 
     // ========================================================================
@@ -588,11 +674,6 @@ public class AutoShootMotifPreset extends OpMode {
      * This is called every loop iteration to continue movement
      * Uses proportional control with settling time for accuracy
      */
-
-    // ========================================================================
-    // CHAMBER POSITION CALCULATOR
-    // ========================================================================
-
     private void updateSorterMovement() {
         // If not moving, nothing to do
         if (!sorterMoving) return;
@@ -869,6 +950,11 @@ public class AutoShootMotifPreset extends OpMode {
     private boolean allChambersFull() {
         return chamberFull[0] && chamberFull[1] && chamberFull[2];
     }
+    private void setAllChambersEmpty() {
+        chamberFull[0] = false;
+        chamberFull[1] = false;
+        chamberFull[2] = false;
+    }
 
     // ========================================================================
     // CHAMBER ROTATION SEQUENCE
@@ -956,6 +1042,7 @@ public class AutoShootMotifPreset extends OpMode {
             case 0: // Wait for mode toggle to complete
                 if (autoShootTimer.seconds() >= MODE_TOGGLE_WAIT_TIME) {
                     rotateSorter();
+                    rotateChamberColorsClockwise();
                     autoShootTimer.reset();
                     autoShootState++;
                 }
@@ -973,6 +1060,7 @@ public class AutoShootMotifPreset extends OpMode {
                 if (autoShootTimer.seconds() >= SHOOT_DURATION) {
                     deactivateShooter();
                     shotsComplete++;
+                    chamberColors[0] = "NONE";
                     autoShootTimer.reset();
                     autoShootState++;
                 }
@@ -981,6 +1069,7 @@ public class AutoShootMotifPreset extends OpMode {
             case 3: // Wait for servo retract
                 if (autoShootTimer.seconds() >= SERVO_RETRACT_DELAY) {
                     rotateSorter();
+                    rotateChamberColorsClockwise();
                     autoShootTimer.reset();
                     autoShootState++;
                 }
@@ -998,6 +1087,7 @@ public class AutoShootMotifPreset extends OpMode {
                 if (autoShootTimer.seconds() >= SHOOT_DURATION) {
                     deactivateShooter();
                     shotsComplete++;
+                    chamberColors[0] = "NONE";
                     autoShootTimer.reset();
                     autoShootState++;
                 }
@@ -1006,6 +1096,7 @@ public class AutoShootMotifPreset extends OpMode {
             case 6: // Wait for servo retract
                 if (autoShootTimer.seconds() >= SERVO_RETRACT_DELAY) {
                     rotateSorter();
+                    rotateChamberColorsClockwise();
                     autoShootTimer.reset();
                     autoShootState++;
                 }
@@ -1023,6 +1114,7 @@ public class AutoShootMotifPreset extends OpMode {
                 if (autoShootTimer.seconds() >= SHOOT_DURATION) {
                     deactivateShooter();
                     shotsComplete++;
+                    chamberColors[0] = "NONE";
                     autoShootTimer.reset();
                     autoShootState++;
                 }
@@ -1040,6 +1132,8 @@ public class AutoShootMotifPreset extends OpMode {
                 if (autoShootTimer.seconds() >= MODE_TOGGLE_WAIT_TIME) {
                     autoShootActive = false;
                     autoShootState = 0;
+                    shootingMode = false;
+                    setAllChambersEmpty();
                     gamepad1.rumble(500); // Signal completion
                 }
                 break;
@@ -1068,6 +1162,51 @@ public class AutoShootMotifPreset extends OpMode {
     private void deactivateShooter() {
         s2.setPosition(0.68);
         s3.setPower(0.0);
+    }
+
+    private void updateTelemetry(int normPos, String shooterColorDetected) {
+        // Calculate flywheel status
+        double currentRPM = (m3.getVelocity() / TICKS_PER_REV_FLYWHEEL) * 60.0;
+        double rpmError = Math.abs(targetRPM - currentRPM);
+        boolean rpmReady = (targetRPM > 0) && (rpmError <= RPM_TOLERANCE);
+
+        telemetry.addLine("=== Tracking Mode (B) ===");
+        telemetry.addLine();
+
+        // === Sorter Status ===
+        telemetry.addLine("=== Sorter ===");
+        telemetry.addData("Pos", normPos);                      // Encoder position
+        telemetry.addData("Chamber", currentChamber + 1);       // Current chamber (1-3 for display)
+        telemetry.addData("Moving", sorterMoving);              // Is sorter moving?
+
+        // Chamber status: O = full, X = empty
+
+        String ch1 = chamberFull[0] ? chamberColors[0] : "X";
+        String ch2 = chamberFull[1] ? chamberColors[1] : "X";
+        String ch3 = chamberFull[2] ? chamberColors[2] : "X";
+        telemetry.addData("Ch1/2/3", chamberColors[0] + "/" + chamberColors[1] + "/" + chamberColors[2]);
+        telemetry.addData("Current Motif State: ", currentMotif);
+        telemetry.addData("Mode", shootingMode ? "SHOOT (Y)" : "INTAKE (Y)");
+        telemetry.addData("Color", shooterColorDetected);       // Color at shooter
+        telemetry.addLine();
+
+        // === Shooter Status ===
+        telemetry.addLine("=== Shooter ===");
+        telemetry.addData("Target RPM", targetRPM);
+        telemetry.addData("Actual RPM", String.format("%.0f", currentRPM));
+        telemetry.addData("Ready", rpmReady ? "YES" : "NO");    // Is flywheel at speed?
+        telemetry.addData("Shooter", gamepad1.a ? "FIRING" : "Ready");
+        telemetry.addData("Distance Mode", distanceBasedRPM ? "AUTO (X)" : "MANUAL (X)");
+        telemetry.addLine();
+
+        // === Control Reference ===
+        telemetry.addLine("=== Controls ===");
+        telemetry.addLine("B: Cycle Track Mode");
+        telemetry.addLine("Y: Mode | DpadRight: Chamber");
+        telemetry.addLine("A: Shoot");
+        telemetry.addLine("RB: RPM | LB: 1500 | DpadDown: Off");
+
+        telemetry.update();
     }
 
     // === Turret Movement Helper ===

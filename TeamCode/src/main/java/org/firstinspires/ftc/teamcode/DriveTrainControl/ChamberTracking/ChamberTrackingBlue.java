@@ -451,6 +451,7 @@ public class ChamberTrackingBlue extends OpMode {
         // In shooting mode: detect when ball leaves chamber
         else {
             checkChamberEmpty();
+
         }
 
         // Get current color at shooter position and update LED indicator
