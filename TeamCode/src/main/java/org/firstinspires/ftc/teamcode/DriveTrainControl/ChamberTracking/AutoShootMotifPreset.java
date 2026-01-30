@@ -1179,7 +1179,7 @@ public class AutoShootMotifPreset extends OpMode {
         double error = desiredRotations - turretRotations;
 
         // If error is significant, move turret
-        if (Math.abs(error) > 0.02) { // 0.02 rotations = ~7.2 degrees
+        if (Math.abs(error) > 0.015) { // 0.01 rotations = ~5.4 degrees
             // Move in direction of error at 30% power
             // Note: Commented line would allow driver to control speed with trigger
             turretMotor.setPower(error / Math.abs(error) * 0.3);

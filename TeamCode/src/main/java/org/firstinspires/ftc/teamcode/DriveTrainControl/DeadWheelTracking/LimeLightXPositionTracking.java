@@ -47,7 +47,7 @@ public class LimeLightXPositionTracking extends OpMode {
 
     @Override
     public void init() {
-        startingPose = new Pose(72, 72, Math.toRadians(90));
+        startingPose = new Pose(123.1, 123.1, Math.toRadians(36));
         follower = Constants.createFollower(hardwareMap);
         follower.setStartingPose(startingPose == null ? new Pose() : startingPose);
         follower.update();
@@ -126,7 +126,7 @@ public class LimeLightXPositionTracking extends OpMode {
         backRightMotor.setPower(clipLowPower(br / max));
 
         // === Turret Rotation Logic ===
-        Pose GOAL_POST = new Pose(10, 134, 0);
+        Pose GOAL_POST = new Pose(134, 134, 0);
 
         boolean LimelightTracking = false;
 
