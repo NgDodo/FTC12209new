@@ -253,6 +253,7 @@ public class AutoShootMotifPreset extends OpMode {
         follower.startTeleopDrive();
         m2.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         m2.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        currentTrackingMode = TrackingMode.LIMELIGHT_AND_ODOMETRY;
     }
 
     @Override
@@ -262,14 +263,8 @@ public class AutoShootMotifPreset extends OpMode {
         // === Tracking Mode Toggle ===
         boolean bPressed = gamepad1.b;
         if (bPressed && !lastBButton) {
-            if (currentTrackingMode == TrackingMode.OFF) {
-                currentTrackingMode = TrackingMode.LIMELIGHT_AND_ODOMETRY;
-                gamepad1.rumble(100);
-            } else {
-                currentTrackingMode = TrackingMode.OFF;
-                m2.setPower(0);
-                gamepad1.rumble(50);
-            }
+            follower.setPose(new Pose(72, 72, Math.PI / 2));
+
         }
         lastBButton = bPressed;
 
@@ -343,73 +338,44 @@ public class AutoShootMotifPreset extends OpMode {
             m2.setPower(0);
         }
 
-        // === Sorter ===
-        int rawPos = backRightMotor.getCurrentPosition();
-        int normPos = normalize(rawPos);
-
+        // === Switch through Motif States ===
         boolean yPressed = gamepad1.y;
-        if (yPressed && !lastY && !autoShootActive) {
-            shootingMode = !shootingMode;
-            int targetPos = getChamberPosition(currentChamber, shootingMode);
-            startSorterMove(targetPos);
-
-            // Find which chamber (A, B, or C) has the green ball
-            int greenIndex = indexOfColor(chamberColors, "GREEN", true);
-
-            // Figure out how much extra to turn chamber, based on motif
-            int rotationCompensateForMotif = 0;
-            if (currentMotif.equals(MOTIF.GPP)) {
-                rotationCompensateForMotif = -1;
-            }
-            if (currentMotif.equals(MOTIF.PGP)) {
-                rotationCompensateForMotif = 0;
-            }
-            if (currentMotif.equals(MOTIF.PPG)) {
-                rotationCompensateForMotif = 1;
-            }
-
-            if (greenIndex != -1) {  // Found a green ball (or next best if no green)
-                // Calculate how many rotations needed to bring that chamber to position A
-                int rotationsNeeded = 0 + rotationCompensateForMotif;
-
-                if (greenIndex == 0) {
-                    // Green is already in A, no rotation needed
-                    rotationsNeeded = 0 + rotationCompensateForMotif;
-                } else if (greenIndex == 1) {
-                    // Green is in B, need to rotate CCW once to make B→A
-                    rotationsNeeded = -1 + rotationCompensateForMotif;  // Negative = counter-clockwise
-                } else if (greenIndex == 2) {
-                    // Green is in C, need to rotate CW once to make C→A
-                    // OR rotate CCW twice (but CW is shorter)
-                    rotationsNeeded = -2 + rotationCompensateForMotif;  // Positive = clockwise
-                }
-
-                // Apply the rotations to the array
-                for (int i = 0; i < Math.abs(rotationsNeeded); i++) {
-                    if (rotationsNeeded > 0) {
-                        rotateChamberColorsClockwise(); // rotates chamberColors[] clockwise
-                        currentChamber = nextChamber(currentChamber); // CW rotation = prev chamber
-                    } else if (rotationsNeeded < 0) {
-                        rotateChamberColorsCounterClockwise(); // rotates chamberColors[] counterclockwise
-                        currentChamber = prevChamber(currentChamber); // CCW rotation = next chamber
-                    }
-                }
-
-                // Calculate the new target position in shooting mode
-                targetPos = getChamberPosition(currentChamber, shootingMode);
-                startSorterMove(targetPos);
+        if (yPressed && !lastY) {
+            switch (currentMotif) {
+                case GPP:
+                    currentMotif = MOTIF.PGP;
+                    return;
+                case PGP:
+                    currentMotif = MOTIF.PPG;
+                    return;
+                case PPG:
+                    currentMotif = MOTIF.GPP;
+                    return;
             }
         }
         lastY = yPressed;
 
+
+        // === Sorter ===
+        int rawPos = backRightMotor.getCurrentPosition();
+        int normPos = normalize(rawPos);
+
         boolean dpadRightPressed = gamepad1.dpad_right;
+        boolean dpadLeftPressed = gamepad1.dpad_left;
         if (dpadRightPressed && !lastDpadRight && !autoShootActive) {
             currentChamber = nextChamber(currentChamber);
             rotateChamberColorsClockwise();
             int targetPos = getChamberPosition(currentChamber, shootingMode);
             startSorterMove(targetPos);
         }
+        else if (dpadLeftPressed && !lastDpadLeft && !autoShootActive) {
+            currentChamber = prevChamber(currentChamber);
+            rotateChamberColorsCounterClockwise();
+            int targetPos = getChamberPosition(currentChamber, shootingMode);
+            startSorterMove(targetPos);
+        }
         lastDpadRight = dpadRightPressed;
+        lastDpadLeft = dpadLeftPressed;
 
         updateSorterMovement();
 
@@ -450,9 +416,6 @@ public class AutoShootMotifPreset extends OpMode {
             // Make sure we're in shooting mode
             if (!shootingMode) {
                 shootingMode = true;
-                // int targetPos = getChamberPosition(currentChamber, shootingMode);
-                // startSorterMove(targetPos);
-
                 // Find which chamber (A, B, or C) has the green ball
                 int greenIndex = indexOfColor(chamberColors, "GREEN", true);
 
@@ -578,23 +541,6 @@ public class AutoShootMotifPreset extends OpMode {
         if (gamepad1.dpad_up) {
             follower.setPose(new Pose(72, 72, Math.PI / 2));
         }
-
-        // === Switch through Motif States ===
-
-        if (gamepad1.dpad_left && !lastDpadLeft) {
-            switch (currentMotif) {
-                case GPP:
-                    currentMotif = MOTIF.PGP;
-                    return;
-                case PGP:
-                    currentMotif = MOTIF.PPG;
-                    return;
-                case PPG:
-                    currentMotif = MOTIF.GPP;
-                    return;
-            }
-        }
-        lastDpadLeft = gamepad1.dpad_left;
     }
 
     // ========================================================================
