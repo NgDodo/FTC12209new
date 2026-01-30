@@ -1191,7 +1191,7 @@ public class AutoShootMotifPreset extends OpMode {
     }
 
     // ========================================================================
-    // CHAMBER SORTING OPERATIONS (UNUSED)
+    // CHAMBER SORTING OPERATIONS
     // ========================================================================
 
     /**
