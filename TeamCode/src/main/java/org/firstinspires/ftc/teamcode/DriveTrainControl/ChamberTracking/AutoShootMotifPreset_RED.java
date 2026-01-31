@@ -21,8 +21,8 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 import java.util.List;
 
-@TeleOp(name = "Auto Shoot Motif Preset + Turret Tracking Test", group = "Test")
-public class AutoShootMotifPreset extends OpMode {
+@TeleOp(name = "[RED]---Auto Shoot Motif Preset + Turret Tracking Test", group = "!Test")
+public class AutoShootMotifPreset_RED extends OpMode {
     // === Drive Train & Mechanisms ===
     DcMotorEx frontLeftMotor, backLeftMotor, frontRightMotor, backRightMotor;
     DcMotor m1;
@@ -283,7 +283,7 @@ public class AutoShootMotifPreset extends OpMode {
 
         // === Turret Tracking Logic ===
         if (currentTrackingMode == TrackingMode.LIMELIGHT_AND_ODOMETRY) {
-            Pose GOAL_POST = new Pose(10, 134, 0);
+            Pose GOAL_POST = new Pose(134, 134, 0);
             boolean LimelightTracking = false;
 
             // IF apriltag in view, do LimeLight tracking.
@@ -1179,7 +1179,7 @@ public class AutoShootMotifPreset extends OpMode {
         double error = desiredRotations - turretRotations;
 
         // If error is significant, move turret
-        if (Math.abs(error) > 0.015) { // 0.01 rotations = ~5.4 degrees
+        if (Math.abs(error) > 0.02) { // 0.01 rotations = ~5.4 degrees
             // Move in direction of error at 30% power
             // Note: Commented line would allow driver to control speed with trigger
             turretMotor.setPower(error / Math.abs(error) * 0.3);

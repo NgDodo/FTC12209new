@@ -27,9 +27,9 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 import java.util.List;
 
-@Autonomous(name = "Turret Fixed---CloseRed", group = "!Autonomous")
+@Autonomous(name = "Turret Fixed---Close Blue", group = "!Autonomous")
 @Configurable
-public class CloseRedMotifTracked___Fixed extends OpMode {
+public class CloseBlueMotifTracked___Fixed extends OpMode {
 
     private TelemetryManager panelsTelemetry;
     public Follower follower;
@@ -222,88 +222,116 @@ public class CloseRedMotifTracked___Fixed extends OpMode {
     }
 
     private void buildPaths() {
+        // Path1: (123.1, 123.1, 36°) -> (90, 82, 0°)
+        // MIRRORED: (17.9, 123.1, 144°) -> (51, 82, 180°)
         Path1 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(123.100, 123.100), new Pose(90, 82.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(36), Math.toRadians(0))
+                .addPath(new BezierLine(new Pose(17.9, 123.100), new Pose(51.0, 82.000)))
+                .setLinearHeadingInterpolation(Math.toRadians(144), Math.toRadians(180))
                 .build();
 
+        // Path2: (90, 82, 0°) -> (95, 82, 0°)
+        // MIRRORED: (51, 82, 180°) -> (46, 82, 180°)
         Path2 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(90.000, 82.000), new Pose(95, 82.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
+                .addPath(new BezierLine(new Pose(51.0, 82.000), new Pose(46.0, 82.000)))
+                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
                 .build();
 
+        // Path3: (95, 82) -> (104, 82)
+        // MIRRORED: (46, 82) -> (37, 82)
         Path3 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(95.000, 82.000), new Pose(103, 82.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
+                .addPath(new BezierLine(new Pose(46.0, 82.000), new Pose(37.0, 82.000)))
+                .setTangentHeadingInterpolation()
                 .build();
 
+        // Path4: (104, 82, 0°) -> (103, 82, 0°)
+        // MIRRORED: (37, 82, 180°) -> (38, 82, 180°)
         Path4 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(103, 82.000), new Pose(102.000, 82.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
+                .addPath(new BezierLine(new Pose(37.0, 82.000), new Pose(38.0, 82.000)))
+                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
                 .build();
 
+        // Path5: (103, 82) -> (107, 82)
+        // MIRRORED: (38, 82) -> (34, 82)
         Path5 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(102.000, 82.000), new Pose(107.5, 82.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
+                .addPath(new BezierLine(new Pose(38.0, 82.000), new Pose(34.0, 82.000)))
+                .setTangentHeadingInterpolation()
                 .build();
 
+        // Path6: (107, 82, 0°) -> (106, 82, 0°)
+        // MIRRORED: (34, 82, 180°) -> (35, 82, 180°)
         Path6 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(107.50, 82.000), new Pose(106, 82.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
+                .addPath(new BezierLine(new Pose(34.0, 82.000), new Pose(35.0, 82.000)))
+                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
                 .build();
 
+        // Path7: (106, 82) -> (118, 82)
+        // MIRRORED: (35, 82) -> (23, 82)
         Path7 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(106, 82.000), new Pose(118, 82.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
+                .addPath(new BezierLine(new Pose(35.0, 82.000), new Pose(23.0, 82.000)))
+                .setTangentHeadingInterpolation()
                 .build();
 
+        // Path8: (118, 82, 0°) -> (90, 82, 0°)
+        // MIRRORED: (23, 82, 180°) -> (51, 82, 180°)
         Path8 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(118, 82.000), new Pose(90.000, 82.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
+                .addPath(new BezierLine(new Pose(23.0, 82.000), new Pose(51.0, 82.000)))
+                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
                 .build();
 
+        // Path9: (90, 82, 0°) -> (95, 58, 0°)
+        // MIRRORED: (51, 82, 180°) -> (46, 58, 180°)
         Path9 = follower.pathBuilder()
-                .addPath(new BezierCurve(
-                        new Pose(90, 82.0),
-                        new Pose(90.0, 61.0),
-                        new Pose(95.0, 58.0)
-                ))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
+                .addPath(new BezierLine(new Pose(51.0, 82.000), new Pose(46.0, 58.0)))
+                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
                 .build();
 
+        // Path10: (95, 60) -> (104, 60)
+        // MIRRORED: (46, 60) -> (37, 60)
         Path10 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(95, 58.000), new Pose(103, 58.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
+                .addPath(new BezierLine(new Pose(46.0, 60.000), new Pose(37.0, 60.000)))
+                .setTangentHeadingInterpolation()
                 .build();
 
+        // Path11: (104, 58, 0°) -> (103, 58, 0°)
+        // MIRRORED: (37, 58, 180°) -> (38, 58, 180°)
         Path11 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(103.0, 58.000), new Pose(102, 58.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
+                .addPath(new BezierLine(new Pose(37.0, 58.000), new Pose(38.0, 58.000)))
+                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
                 .build();
 
+        // Path12: (103, 58) -> (107, 58)
+        // MIRRORED: (38, 58) -> (34, 58)
         Path12 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(102, 58.000), new Pose(107.50, 58.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
+                .addPath(new BezierLine(new Pose(38.0, 58.000), new Pose(34.0, 58.000)))
+                .setTangentHeadingInterpolation()
                 .build();
 
+        // Path13: (107, 58, 0°) -> (106, 58, 0°)
+        // MIRRORED: (34, 58, 180°) -> (35, 58, 180°)
         Path13 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(107.50, 58.000), new Pose(106, 58.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
+                .addPath(new BezierLine(new Pose(34.0, 58.000), new Pose(35.0, 58.000)))
+                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
                 .build();
 
+        // Path14: (106, 58) -> (118, 58)
+        // MIRRORED: (35, 58) -> (23, 58)
         Path14 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(106, 58.000), new Pose(118.000, 58.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
+                .addPath(new BezierLine(new Pose(35.0, 58.000), new Pose(23.0, 58.000)))
+                .setTangentHeadingInterpolation()
                 .build();
 
+        // Path15: (118, 58, 0°) -> (90, 82, 0°)
+        // MIRRORED: (23, 58, 180°) -> (51, 82, 180°)
         Path15 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(118.000, 58.000), new Pose(90.000, 82.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
+                .addPath(new BezierLine(new Pose(23.0, 58.000), new Pose(51.0, 82.000)))
+                .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
                 .build();
 
+        // Path16: (90, 82) -> (108, 82)
+        // MIRRORED: (51, 82) -> (33, 82)
         Path16 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(90.000, 82.000), new Pose(108.000, 82.000)))
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
+                .addPath(new BezierLine(new Pose(51.0, 82.000), new Pose(33.0, 82.000)))
+                .setTangentHeadingInterpolation()
                 .build();
     }
 
@@ -415,7 +443,7 @@ public class CloseRedMotifTracked___Fixed extends OpMode {
      * This runs continuously throughout the autonomous
      */
     private void updateTurretTracking() {
-        Pose GOAL_POST = new Pose(134, 134, 0);
+        Pose GOAL_POST = new Pose(7, 134, 0);
         boolean limelightTracking = false;
 
         // Try Limelight tracking first (if AprilTag visible)
