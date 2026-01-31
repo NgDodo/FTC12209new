@@ -140,7 +140,7 @@ public class CloseBlueMotifTracked___Fixed extends OpMode {
         panelsTelemetry = PanelsTelemetry.INSTANCE.getTelemetry();
 
         follower = Constants.createFollower(hardwareMap);
-        follower.setStartingPose(new Pose(123.1, 123.1, Math.toRadians(36)));
+        follower.setStartingPose(new Pose(17.9, 123.1, Math.toRadians(144)));
 
         buildPaths();
 
