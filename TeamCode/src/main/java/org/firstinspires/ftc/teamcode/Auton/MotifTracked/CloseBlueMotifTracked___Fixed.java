@@ -123,7 +123,7 @@ public class CloseBlueMotifTracked___Fixed extends OpMode {
     // === Shooting parameters ===
     private static final double IDLE_RPM = 2000;
     private static final double SHOOTING_RPM = 2550;
-    private static final double SPINUP_TIME = 0.75;
+    private static final double SPINUP_TIME = 1.25;
     private static final double SHOOT_DURATION = 0.3;
     private static final double SERVO_RETRACT_DELAY = 0.2;
     private static final double SORTER_WAIT_TIME = 0.15;
@@ -307,13 +307,13 @@ public class CloseBlueMotifTracked___Fixed extends OpMode {
 
         // Path14: (31, 60) -> (19, 60)
         Path14 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(31.0, 60.000), new Pose(19.0, 60.000)))
+                .addPath(new BezierLine(new Pose(31.0, 60.000), new Pose(22.0, 60.000)))
                 .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
                 .build();
 
         // Path15: (19, 60, 180°) -> (47, 84, 180°)
         Path15 = follower.pathBuilder()
-                .addPath(new BezierLine(new Pose(19.0, 60.000), new Pose(47.0, 84.000)))
+                .addPath(new BezierLine(new Pose(22.0, 60.000), new Pose(47.0, 84.000)))
                 .setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
                 .build();
 
@@ -534,6 +534,7 @@ public class CloseBlueMotifTracked___Fixed extends OpMode {
 
             case 102: // Wait for sorter rotation
                 if (pathTimer.seconds() >= SORTER_WAIT_TIME) {
+                    turretTrackingMode = "GOAL";
                     activateShooter();
                     pathTimer.reset();
                     pathState++;
@@ -677,7 +678,6 @@ public class CloseBlueMotifTracked___Fixed extends OpMode {
 
             case 8: // Path 7 - Stop intake
                 if (!follower.isBusy()) {
-                    stopIntake();
                     follower.followPath(Path8);
                     pathState++;
                 }
@@ -685,6 +685,7 @@ public class CloseBlueMotifTracked___Fixed extends OpMode {
 
             case 9: // Path 8
                 if (!follower.isBusy()) {
+                    stopIntake();
                     pathState = 200; // Go to second shooting sequence
                     pathTimer.reset();
                 }
@@ -857,7 +858,6 @@ public class CloseBlueMotifTracked___Fixed extends OpMode {
 
             case 17: // Path 14 - Stop intake
                 if (!follower.isBusy()) {
-                    stopIntake();
                     follower.followPath(Path15);
                     pathState++;
                 }
@@ -865,6 +865,7 @@ public class CloseBlueMotifTracked___Fixed extends OpMode {
 
             case 18: // Path 15
                 if (!follower.isBusy()) {
+                    stopIntake();
                     pathState = 300; // Go to third shooting sequence
                     pathTimer.reset();
                 }

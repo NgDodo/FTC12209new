@@ -19,7 +19,7 @@ import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "New Far Path Following", group = "Autonomous")
+@Autonomous(name = "Red Far Auton", group = "Autonomous")
 @Configurable
 public class FarAutonNew extends OpMode {
 
@@ -214,6 +214,12 @@ public class FarAutonNew extends OpMode {
         pathState = 0;
         targetRPM = IDLE_RPM;
         follower.followPath(Path1);
+
+        m2.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        m2.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        m2.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        m2.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        m2.setTargetPosition(0);
     }
 
     @Override
@@ -236,8 +242,7 @@ public class FarAutonNew extends OpMode {
         double currentRPM = (m3.getVelocity() / TICKS_PER_REV) * 60.0;
 
         // hold turret state
-        m2.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        m2.setPower(0);
+        m2.setPower(0.05);
 
         panelsTelemetry.debug("Path State", pathState);
         panelsTelemetry.debug("Shots Complete", shotsComplete);
