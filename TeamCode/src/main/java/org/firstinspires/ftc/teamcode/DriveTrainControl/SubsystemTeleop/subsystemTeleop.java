@@ -47,9 +47,9 @@ public class subsystemTeleop extends OpMode {
         frontLeftMotor.setDirection(DcMotorSimple.Direction.REVERSE);
         backLeftMotor.setDirection(DcMotorSimple.Direction.REVERSE);
 
-        intake = new Intake();
-        sorter = new Sorter();
-        turret = new Turret("BLUE");
+        intake = new Intake(hardwareMap);
+        sorter = new Sorter(hardwareMap);
+        turret = new Turret(hardwareMap, "BLUE");
     }
 
     @Override
@@ -83,9 +83,9 @@ public class subsystemTeleop extends OpMode {
         updateTelemetry();
     }
     private void updateTelemetry() {
-        intake.postTelemetry();
-        sorter.postTelemetry();
-        turret.postTelemetry();
+        intake.postTelemetry(telemetry);
+        sorter.postTelemetry(telemetry);
+        turret.postTelemetry(telemetry);
 
         // === Control Reference ===
         telemetry.addLine("=== Controls ===");

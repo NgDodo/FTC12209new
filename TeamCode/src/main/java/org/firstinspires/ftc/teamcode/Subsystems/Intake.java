@@ -6,6 +6,9 @@ import static org.firstinspires.ftc.robotcore.external.BlocksOpModeCompanion.tel
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.Gamepad;
+import com.qualcomm.robotcore.hardware.HardwareMap;
+
+import org.firstinspires.ftc.robotcore.external.Telemetry;
 
 public class Intake {
     public enum intakeStateFSM {
@@ -18,7 +21,7 @@ public class Intake {
 
     public double intakePower;
 
-    public Intake(){
+    public Intake(HardwareMap hardwareMap){
         this.intakeState = intakeStateFSM.INTAKE_STOP;
         this.intakeMotor = hardwareMap.get(DcMotorEx.class, "m1");
         this.intakeMotor.setZeroPowerBehavior(DcMotorEx.ZeroPowerBehavior.BRAKE);
@@ -65,7 +68,7 @@ public class Intake {
                 break;
         }
     }
-    public void postTelemetry() {
+    public void postTelemetry(Telemetry telemetry) {
         /// lowk there's absolutely no telemetry for the intake to post
     }
 }

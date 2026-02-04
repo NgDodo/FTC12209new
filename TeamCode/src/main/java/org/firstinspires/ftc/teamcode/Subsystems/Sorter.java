@@ -3,14 +3,18 @@ package org.firstinspires.ftc.teamcode.Subsystems;
 import static org.firstinspires.ftc.robotcore.external.BlocksOpModeCompanion.hardwareMap;
 import static org.firstinspires.ftc.robotcore.external.BlocksOpModeCompanion.telemetry;
 
+import com.bylazar.configurables.annotations.Configurable;
 import com.qualcomm.hardware.rev.RevColorSensorV3;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.Gamepad;
+import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
+import org.firstinspires.ftc.robotcore.external.Telemetry;
 import org.firstinspires.ftc.teamcode.DriveTrainControl.ChamberTracking.AutoShootMotifPreset_BLUE;
 
+@Configurable
 public class Sorter {
     public enum sorterStateFSM {
         INTAKE_STATIC, // in intake mode, not moving
@@ -23,7 +27,7 @@ public class Sorter {
     private DcMotorEx sorterEncoder;
 
     public sorterStateFSM sorterState;
-    private String[] chamberColors;
+    private String[] chamberColors = {"NONE", "NONE", "NONE"};
     private enum MOTIF {
         GPP,
         PGP,
@@ -59,7 +63,19 @@ public class Sorter {
     boolean lastDpadRight = false;
     boolean lastY = false;
 
-    public Sorter(){
+    private ElapsedTime moveTimer = new ElapsedTime();
+
+    // === PID State ===
+    private double integral = 0.0;
+    private double lastError = 0.0;
+    private long lastTime = 0;
+
+    // === PID GAINS (Editable in FTC Dashboard) ===
+    public static double kP = 0.002;
+    public static double kI = 0.0;
+    public static double kD = 0.00006;
+
+    public Sorter(HardwareMap hardwareMap){
         this.sorterState = sorterStateFSM.INTAKE_STATIC;
         this.sorterMotor = hardwareMap.get(DcMotorEx.class, "m0");
         this.sorterMotor.setZeroPowerBehavior(DcMotorEx.ZeroPowerBehavior.BRAKE);
@@ -68,7 +84,6 @@ public class Sorter {
         this.sorterEncoder = hardwareMap.get(DcMotorEx.class, "bR");
         this.sorterEncoder.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         this.sorterEncoder.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-
 
         this.chamberColors[0] = "NONE";
         this.chamberColors[1] = "NONE";
@@ -122,63 +137,38 @@ public class Sorter {
     }
 
     private void updateSorterPIDMove() {
-        /// TODO: Swap out for PID
-
         // Get current position and calculate error to target
         int pos = _normalize(sorterEncoder.getCurrentPosition());
         int error = _calculateShortestError(pos, sorterTargetPosition);
 
-        // Tighter tolerances for faster completion
-        int FAST_PERFECT_TOL = 50;   // Within 50 ticks = close enough
-        int FAST_FINE_TOL = 100;     // Within 100 ticks = fine positioning
+        // Calculate time delta
+        long currentTime = System.nanoTime();
+        double dt = (currentTime - lastTime) / 1e9;
+        lastTime = currentTime;
 
-        // ===== SETTLING PHASE =====
-        // When very close to target, enter settling phase
-        if (Math.abs(error) <= FAST_PERFECT_TOL) {
-            if (!sorterSettling) {
-                // Just entered settling phase
-                sorterSettling = true;
-                sorterSettleTimer.reset();
-                sorterMotor.setPower(0);  // Stop motor to settle
-            }
-
-            // Wait for settle time to ensure position is stable
-            long FAST_SETTLE_MS = 30;  // 30ms settle time
-            if (sorterSettleTimer.milliseconds() >= FAST_SETTLE_MS) {
-                // Successfully settled at target position
-                sorterMotor.setPower(0);
-
-                sorterSettling = false;
-                return;
-            }
-
-            // If error increases during settling, exit settling phase
-            if (Math.abs(error) > FAST_FINE_TOL) {
-                sorterSettling = false;
-            } else {
-                return;  // Still settling, wait
-            }
-        } else {
-            sorterSettling = false;  // Too far from target for settling
+        if (dt <= 0 || dt > 0.1) {
+            dt = 0.02;
         }
 
-        // ===== PROPORTIONAL SPEED CONTROL =====
-        double power;
-        int absError = Math.abs(error);
+        // PID terms
+        double pTerm = kP * error;
 
-        if (absError > COARSE_TOL) {
-            // Far from target: use maximum power
-            power = MAX_POWER;
-        } else {
-            // Close to target: slow down proportionally
-            // ratio goes from 1.0 (at COARSE_TOL) to 0.0 (at target)
-            double ratio = (double) absError / COARSE_TOL;
-            power = MIN_POWER + (MAX_POWER - MIN_POWER) * ratio;
-            power = Math.max(MIN_POWER, Math.min(MAX_POWER, power));
-        }
+        integral += error * dt;
+        integral = Math.max(-5000, Math.min(5000, integral)); // Anti-windup
+        double iTerm = kI * integral;
 
-        // Apply power with correct direction (sign of error)
-        sorterMotor.setPower(Math.signum(error) * power);
+        double derivative = (error - lastError) / dt;
+        double dTerm = kD * derivative;
+
+        lastError = error;
+
+        // Total output
+        double power = pTerm + iTerm + dTerm;
+
+        // Clamp output
+        power = Math.max(-1.0, Math.min(1.0, power));
+
+        sorterMotor.setPower(power);
     }
 
     // ========================================================================
@@ -439,7 +429,7 @@ public class Sorter {
         sorterSettling = false;
         sorterTimer.reset();
     }
-    public void postTelemetry() {
+    public void postTelemetry(Telemetry telemetry) {
         int rawPos = sorterEncoder.getCurrentPosition();
         int normPos = _normalize(rawPos);
 

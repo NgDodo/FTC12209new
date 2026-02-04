@@ -3,6 +3,7 @@ package org.firstinspires.ftc.teamcode.DriveTrainControl.TuneSubsystems;
 import com.acmerobotics.dashboard.FtcDashboard;
 import com.acmerobotics.dashboard.config.Config;
 import com.acmerobotics.dashboard.telemetry.MultipleTelemetry;
+import com.bylazar.configurables.annotations.Configurable;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
@@ -22,16 +23,17 @@ import com.qualcomm.robotcore.util.ElapsedTime;
  * A: Chamber 0 (0°)
  * B: Chamber 1 (120°)
  * X: Chamber 2 (240°)
- * Y: Toggle Shooting Mode (+60° offset)
+ * Y: Toggle Shooting Mode (+180° offset)
  */
 @Config
+@Configurable
 @TeleOp(name = "Sorter PID Tuner (Dashboard)", group = "Tuning")
 public class tuneSorterPID extends OpMode {
 
     // === PID GAINS (Editable in FTC Dashboard) ===
-    public static double kP = 0.0015;
+    public static double kP = 0.002;
     public static double kI = 0.0;
-    public static double kD = 0.0002;
+    public static double kD = 0.00006;
 
     // === Hardware ===
     private DcMotorEx sorterMotor;
@@ -178,7 +180,7 @@ public class tuneSorterPID extends OpMode {
         double output = pTerm + iTerm + dTerm;
 
         // Clamp output
-        output = Math.max(-0.8, Math.min(0.8, output));
+        output = Math.max(-1.0, Math.min(1.0, output));
 
         return output;
     }

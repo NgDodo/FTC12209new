@@ -11,7 +11,10 @@ import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.Gamepad;
+import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.IMU;
+
+import org.firstinspires.ftc.robotcore.external.Telemetry;
 
 import java.util.List;
 
@@ -66,7 +69,7 @@ public class Turret {
 
     private Pose GoalLocation;
 
-    public Turret (String allianceColor) {;
+    public Turret (HardwareMap hardwareMap, String allianceColor) {;
         switch (allianceColor) {
             case "RED":
                 GoalLocation = FIELD_CONSTANTS.RED_GOAL_POST;
@@ -94,6 +97,9 @@ public class Turret {
         imu.resetYaw();
 
         flywheelLastTime = System.nanoTime();
+
+        flywheelMotor = hardwareMap.get(DcMotorEx.class, "m1");
+        turretRotationMotor = hardwareMap.get(DcMotorEx.class, "m2");
     }
 
     public void updateTurret(Follower follower, Gamepad gamepad1) {
@@ -208,7 +214,7 @@ public class Turret {
         return angle;
     }
 
-    public void postTelemetry() {
+    public void postTelemetry(Telemetry telemetry) {
         // Calculate flywheel status
         double currentRPM = (flywheelMotor.getVelocity() / TICKS_PER_REV_FLYWHEEL) * 60.0;
         double rpmError = Math.abs(targetRPM - currentRPM);
