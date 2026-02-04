@@ -1,0 +1,209 @@
+package org.firstinspires.ftc.teamcode.Subsystems;
+
+import static org.firstinspires.ftc.robotcore.external.BlocksOpModeCompanion.hardwareMap;
+
+import com.pedropathing.follower.Follower;
+import com.pedropathing.geometry.Pose;
+import com.qualcomm.hardware.limelightvision.LLResult;
+import com.qualcomm.hardware.limelightvision.LLResultTypes;
+import com.qualcomm.hardware.limelightvision.Limelight3A;
+import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.Gamepad;
+import com.qualcomm.robotcore.hardware.IMU;
+
+import java.util.List;
+
+public class Turret {
+    private DcMotorEx turretRotationMotor;
+    private DcMotorEx flywheelMotor;
+
+    boolean leftBumperPressed, rightBumperPressed = false;
+
+    // === Vision & IMU ===
+    private Limelight3A limelight;
+    private IMU imu;
+    private static final String LIMELIGHT_NAME = "Webcam 2";
+    private static final int APRILTAG_PIPELINE = 1;
+
+    // === Turret Configuration ===
+    private static final double TURRET_TICKS_PER_REV = 1393.1;
+
+    // === Tracking Mode ===
+    private enum TrackingMode {
+        OFF,
+        LIMELIGHT_AND_ODOMETRY
+    }
+
+    // === Shooting parameters ===
+    private static final double IDLE_RPM = 2000;
+    private static final double SPINUP_TIME = 0.75;
+
+    // === Shooter presets ===
+    private final int[] rpmPresets = {2600, 3300};
+    private int presetIndex = -1;
+    private double targetRPM = 0;
+    private boolean lastRightBumper = false;
+    private boolean lastLeftBumper = false;
+    private boolean lastDpadLeft = false;
+    private boolean lastDpadDown = false;
+
+    private static final double TICKS_PER_REV_FLYWHEEL = 28.0;
+    private static final double RPM_TOLERANCE = 100.0;
+
+    // === Flywheel PID ===
+    private double flywheelKp = 0.0012;
+    private double flywheelKi = 0.00001;
+    private double flywheelKd = 0.0;
+    private double flywheelKF = 0.00025;
+    private double flywheelIntegral = 0;
+    private double flywheelLastError = 0;
+    private long flywheelLastTime = 0;
+
+    private TrackingMode currentTrackingMode = TrackingMode.LIMELIGHT_AND_ODOMETRY;
+    private boolean lastBButton = false;
+
+    private Pose GoalLocation;
+
+    public Turret (String allianceColor) {;
+        switch (allianceColor) {
+            case "RED":
+                GoalLocation = FIELD_CONSTANTS.RED_GOAL_POST;
+                break;
+            case "BLUE":
+                GoalLocation = FIELD_CONSTANTS.BLUE_GOAL_POST;
+                break;
+            default:
+                GoalLocation = FIELD_CONSTANTS.BLUE_GOAL_POST;
+                break;
+        }
+
+        limelight = hardwareMap.get(Limelight3A.class, LIMELIGHT_NAME);
+        limelight.setPollRateHz(100);
+        limelight.pipelineSwitch(APRILTAG_PIPELINE);
+
+        imu = hardwareMap.get(IMU.class, "imu");
+        IMU.Parameters imuParams = new IMU.Parameters(
+                new RevHubOrientationOnRobot(
+                        RevHubOrientationOnRobot.LogoFacingDirection.UP,
+                        RevHubOrientationOnRobot.UsbFacingDirection.FORWARD
+                )
+        );
+        imu.initialize(imuParams);
+        imu.resetYaw();
+
+        flywheelLastTime = System.nanoTime();
+    }
+
+    public void updateTurret(Follower follower, Gamepad gamepad1) {
+        leftBumperPressed = gamepad1.left_bumper;
+        rightBumperPressed = gamepad1.right_bumper;
+
+        if (leftBumperPressed && !lastLeftBumper) {
+            targetRPM = IDLE_RPM;
+        }
+
+        if (rightBumperPressed && !lastRightBumper) {
+            presetIndex = (presetIndex + 1) % rpmPresets.length;
+            targetRPM = rpmPresets[presetIndex];
+        }
+
+        updateTurretRotation(follower);
+        updateFlywheelSpeed(follower);
+
+        lastLeftBumper = leftBumperPressed;
+        lastRightBumper = rightBumperPressed;
+    }
+
+    private void updateFlywheelSpeed(Follower follower) {
+        /// TODO: make flywheel speed update based on 1) follower distance, and 2) limelight distance
+
+        double currentVelocity = flywheelMotor.getVelocity();
+        double currentRPM = (currentVelocity / TICKS_PER_REV_FLYWHEEL) * 60.0;
+
+        long currentTime = System.nanoTime();
+        double dt = (currentTime - flywheelLastTime) / 1e9;
+
+        double error = targetRPM - currentRPM;
+
+        flywheelIntegral += error * dt;
+        flywheelIntegral = Math.max(-10000, Math.min(10000, flywheelIntegral));
+
+        double derivative = (error - flywheelLastError) / dt;
+        double feedforward = flywheelKF * targetRPM;
+        double pidOutput = (flywheelKp * error) + (flywheelKi * flywheelIntegral) + (flywheelKd * derivative) + feedforward;
+
+        pidOutput = Math.max(-1.0, Math.min(1.0, pidOutput));
+
+        flywheelMotor.setPower(pidOutput);
+
+        flywheelLastError = error;
+        flywheelLastTime = currentTime;
+    }
+
+    private void updateTurretRotation(Follower follower) {
+        boolean limelightTracking = false;
+
+        // Try Limelight tracking first (if AprilTag visible)
+        LLResult result = limelight.getLatestResult();
+        if (result != null && result.isValid()) {
+            List<LLResultTypes.FiducialResult> fiducials = result.getFiducialResults();
+
+            for (LLResultTypes.FiducialResult fiducial : fiducials) {
+                if (fiducial.getFiducialId() == 24) {
+                    limelightTracking = true;
+                    double bearing = fiducial.getTargetXDegrees();
+                    double turretRotatePower = 0.067 * bearing / 20.0;
+
+                    if (Math.abs(bearing) > 2) {
+                        turretRotationMotor.setPower(turretRotatePower);
+                    } else {
+                        turretRotationMotor.setPower(0);
+                    }
+                    break; // Found tag 20, stop searching
+                }
+            }
+        }
+
+        // If Limelight not tracking, use odometry-based tracking
+        if (!limelightTracking) {
+            // 1. Calculate component distances from goal
+            double y_goal_distance = follower.getPose().getY() - GoalLocation.getY();
+            double x_goal_distance = follower.getPose().getX() - GoalLocation.getX();
+
+            // 2. Calculate absolute angle to goal in field coordinates
+            double angle_to_goal = Math.atan2(y_goal_distance, x_goal_distance);
+
+            // 3. Calculate turret offset relative to robot heading
+            double turretDesiredRelativeOffset = normalizeAngle(-angle_to_goal + follower.getHeading() + Math.PI);
+
+            // 4. Move turret to track the goal
+            moveTurretToOffset(turretRotationMotor, turretDesiredRelativeOffset);
+        }
+    }
+    /**
+     * Moves turret to desired offset angle (odometry-based tracking)
+     */
+    private double moveTurretToOffset(DcMotorEx turretMotor, double turretDesiredRelativeOffset) {
+        double turretDesiredDegrees = Math.toDegrees(turretDesiredRelativeOffset);
+        double turretRotations = turretMotor.getCurrentPosition() / TURRET_TICKS_PER_REV;
+        double desiredRotations = turretDesiredDegrees / 360.0;
+        double error = desiredRotations - turretRotations;
+
+        if (Math.abs(error) > 0.015) { // 0.02 rotations tolerance
+            turretMotor.setPower(error / Math.abs(error) * 0.2);
+        } else {
+            turretMotor.setPower(0);
+        }
+        return error;
+    }
+
+    /**
+     * Normalizes an angle to the range [-PI, PI]
+     */
+    private double normalizeAngle(double angle) {
+        while (angle > Math.PI) angle -= 2 * Math.PI;
+        while (angle < -Math.PI) angle += 2 * Math.PI;
+        return angle;
+    }
+}
