@@ -1,12 +1,15 @@
 package org.firstinspires.ftc.teamcode.Subsystems;
 
 import static org.firstinspires.ftc.robotcore.external.BlocksOpModeCompanion.hardwareMap;
+import static org.firstinspires.ftc.robotcore.external.BlocksOpModeCompanion.telemetry;
 
 import com.qualcomm.hardware.rev.RevColorSensorV3;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.util.ElapsedTime;
+
+import org.firstinspires.ftc.teamcode.DriveTrainControl.ChamberTracking.AutoShootMotifPreset_BLUE;
 
 public class Sorter {
     public enum sorterStateFSM {
@@ -26,6 +29,8 @@ public class Sorter {
         PGP,
         PPG
     }
+
+    private MOTIF currentMotif;
 
     // === Non-blocking sorter movement ===
     private int sorterTargetPosition = 0;
@@ -52,7 +57,7 @@ public class Sorter {
     private int currentChamber = 0;
 
     boolean lastDpadRight = false;
-
+    boolean lastY = false;
 
     public Sorter(){
         this.sorterState = sorterStateFSM.INTAKE_STATIC;
@@ -70,6 +75,8 @@ public class Sorter {
         this.chamberColors[2] = "NONE";
 
         this.intakeColor = hardwareMap.get(RevColorSensorV3.class, "intakeColor");
+
+        this.currentMotif = MOTIF.GPP;
     }
 
     public void updateSorter(Gamepad gamepad1) {
@@ -78,14 +85,13 @@ public class Sorter {
         // If not shooting, check auto intake color
         if (sorterState.equals(sorterStateFSM.INTAKE_STATIC)) autoIntakeColorCheck();
 
-
         ///// ===== If moving: ===== /////
         boolean dpadRightPressed = gamepad1.dpad_right;
 
         if (sorterState.equals(sorterStateFSM.SWITCHING_CHAMBERS)) {
             updateSorterPIDMove();
         }
-        if (gamepad1.dpad_right && !lastDpadRight) {
+        if (dpadRightPressed && !lastDpadRight) {
             sorterState = sorterStateFSM.SWITCHING_CHAMBERS;
 
             currentChamber = nextChamber(currentChamber);
@@ -94,7 +100,25 @@ public class Sorter {
             startSorterMove(targetPos);
         }
 
+        boolean yPressed = gamepad1.y;
+
+        ///// ===== Update Internal MOTIF  ====== /////
+        if (yPressed && !lastY) {
+            switch (currentMotif) {
+                case GPP:
+                    currentMotif = MOTIF.PGP;
+                    break;
+                case PGP:
+                    currentMotif = MOTIF.PPG;
+                    break;
+                case PPG:
+                    currentMotif = MOTIF.GPP;
+                    break;
+            }
+        }
+
         lastDpadRight = dpadRightPressed;
+        lastY = yPressed;
     }
 
     private void updateSorterPIDMove() {
@@ -414,5 +438,24 @@ public class Sorter {
         sorterState = sorterStateFSM.SWITCHING_CHAMBERS;
         sorterSettling = false;
         sorterTimer.reset();
+    }
+    public void postTelemetry() {
+        int rawPos = sorterEncoder.getCurrentPosition();
+        int normPos = _normalize(rawPos);
+
+        telemetry.addLine("=== Sorter ===");
+        telemetry.addData("Pos", normPos);                                                  // Encoder position
+        telemetry.addData("Chamber", currentChamber + 1);                                // Current chamber (1-3 for display)
+        telemetry.addData("Moving", sorterState.equals(sorterStateFSM.SWITCHING_CHAMBERS)); // Is sorter moving?
+
+        // Chamber status: O = full, X = empty
+
+        String ch1 = !chamberColors[0].equals("NONE") ? chamberColors[0] : "X";
+        String ch2 = !chamberColors[1].equals("NONE") ? chamberColors[1] : "X";
+        String ch3 = !chamberColors[2].equals("NONE") ? chamberColors[2] : "X";
+        telemetry.addData("Ch1/2/3", ch1 + "/" + ch2 + "/" + ch3);
+
+        telemetry.addData("Current Motif State: ", currentMotif);
+        telemetry.addLine();
     }
 }

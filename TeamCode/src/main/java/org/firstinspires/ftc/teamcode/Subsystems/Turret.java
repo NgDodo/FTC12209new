@@ -1,6 +1,7 @@
 package org.firstinspires.ftc.teamcode.Subsystems;
 
 import static org.firstinspires.ftc.robotcore.external.BlocksOpModeCompanion.hardwareMap;
+import static org.firstinspires.ftc.robotcore.external.BlocksOpModeCompanion.telemetry;
 
 import com.pedropathing.follower.Follower;
 import com.pedropathing.geometry.Pose;
@@ -205,5 +206,18 @@ public class Turret {
         while (angle > Math.PI) angle -= 2 * Math.PI;
         while (angle < -Math.PI) angle += 2 * Math.PI;
         return angle;
+    }
+
+    public void postTelemetry() {
+        // Calculate flywheel status
+        double currentRPM = (flywheelMotor.getVelocity() / TICKS_PER_REV_FLYWHEEL) * 60.0;
+        double rpmError = Math.abs(targetRPM - currentRPM);
+        boolean rpmReady = (targetRPM > 0) && (rpmError <= RPM_TOLERANCE);
+
+        telemetry.addLine("=== Shooter ===");
+        telemetry.addData("Target RPM", targetRPM);
+        telemetry.addData("Actual RPM", String.format("%.0f", currentRPM));
+        telemetry.addData("Ready", rpmReady ? "YES" : "NO");    // Is flywheel at speed?
+        telemetry.addLine();
     }
 }
