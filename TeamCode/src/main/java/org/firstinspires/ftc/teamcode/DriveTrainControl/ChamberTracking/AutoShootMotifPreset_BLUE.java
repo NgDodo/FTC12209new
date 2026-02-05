@@ -25,7 +25,7 @@ import java.util.List;
 public class AutoShootMotifPreset_BLUE extends OpMode {
     // === Drive Train & Mechanisms ===
     DcMotorEx frontLeftMotor, backLeftMotor, frontRightMotor, backRightMotor;
-    DcMotor m1;
+    DcMotorEx m1;
     DcMotorEx m2; // Turret motor
     DcMotorEx m3, m0;
     CRServo s3;
@@ -163,6 +163,8 @@ public class AutoShootMotifPreset_BLUE extends OpMode {
         PPG
     }
     private MOTIF currentMotif;
+
+    private ElapsedTime loopTime = new ElapsedTime();
     @Override
     public void init() {
         startingPose = new Pose(72, 72, Math.toRadians(90));
@@ -184,7 +186,7 @@ public class AutoShootMotifPreset_BLUE extends OpMode {
         backLeftMotor.setDirection(DcMotorSimple.Direction.REVERSE);
 
         // === Mechanisms ===
-        m1 = hardwareMap.get(DcMotor.class, "m1");
+        m1 = hardwareMap.get(DcMotorEx.class, "m1");
         m2 = hardwareMap.get(DcMotorEx.class, "m2");
         m3 = hardwareMap.get(DcMotorEx.class, "m3");
         m0 = hardwareMap.get(DcMotorEx.class, "m0");
@@ -259,6 +261,7 @@ public class AutoShootMotifPreset_BLUE extends OpMode {
     @Override
     public void loop() {
         follower.update();
+        loopTime.reset();
 
         // === Tracking Mode Toggle ===
         boolean bPressed = gamepad1.b;
@@ -534,6 +537,9 @@ public class AutoShootMotifPreset_BLUE extends OpMode {
 
         updateRPMLED();
 
+        // === Manual Motor Power Read
+        telemetry.addData("Intake Power: ", m1.getPower());
+        telemetry.addData("Intake Velocity: ", m1.getVelocity());
         // Update driver station telemetry
         updateTelemetry(normPos, shooterColorDetected);
 
@@ -541,6 +547,8 @@ public class AutoShootMotifPreset_BLUE extends OpMode {
         if (gamepad1.dpad_up) {
             follower.setPose(new Pose(72, 72, Math.PI / 2));
         }
+
+        loopTime.reset();
     }
 
     // ========================================================================
@@ -1151,6 +1159,8 @@ public class AutoShootMotifPreset_BLUE extends OpMode {
         telemetry.addLine("Y: Mode | DpadRight: Chamber");
         telemetry.addLine("A: Shoot");
         telemetry.addLine("RB: RPM | LB: 1500 | DpadDown: Off");
+
+        telemetry.addData("Loop Time: ", 1.0 / loopTime.seconds());
 
         telemetry.update();
     }

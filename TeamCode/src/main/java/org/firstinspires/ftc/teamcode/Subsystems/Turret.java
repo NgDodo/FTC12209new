@@ -1,14 +1,12 @@
 package org.firstinspires.ftc.teamcode.Subsystems;
 
-import static org.firstinspires.ftc.robotcore.external.BlocksOpModeCompanion.hardwareMap;
-import static org.firstinspires.ftc.robotcore.external.BlocksOpModeCompanion.telemetry;
-
 import com.pedropathing.follower.Follower;
 import com.pedropathing.geometry.Pose;
 import com.qualcomm.hardware.limelightvision.LLResult;
 import com.qualcomm.hardware.limelightvision.LLResultTypes;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
+import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.HardwareMap;
@@ -100,6 +98,11 @@ public class Turret {
 
         flywheelMotor = hardwareMap.get(DcMotorEx.class, "m1");
         turretRotationMotor = hardwareMap.get(DcMotorEx.class, "m2");
+
+        // === Turret Setup ===
+        turretRotationMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        turretRotationMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        turretRotationMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
     }
 
     public void updateTurret(Follower follower, Gamepad gamepad1) {

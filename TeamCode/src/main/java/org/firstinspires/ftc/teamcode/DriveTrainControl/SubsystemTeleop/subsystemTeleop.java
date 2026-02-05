@@ -7,6 +7,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.teamcode.Subsystems.Intake;
 import org.firstinspires.ftc.teamcode.Subsystems.Sorter;
@@ -26,6 +27,8 @@ public class subsystemTeleop extends OpMode {
     public static Pose startingPose;
 
     private boolean lastBButton;
+
+    private ElapsedTime loopTime = new ElapsedTime();
 
     @Override
     public void init() {
@@ -50,10 +53,13 @@ public class subsystemTeleop extends OpMode {
         intake = new Intake(hardwareMap);
         sorter = new Sorter(hardwareMap);
         turret = new Turret(hardwareMap, "BLUE");
+
+        loopTime.reset();
     }
 
     @Override
     public void loop() {
+
         // === Drive Train ===
         double y = applyDeadzone(-gamepad1.left_stick_y);
         double x = applyDeadzone(gamepad1.left_stick_x);
@@ -81,11 +87,19 @@ public class subsystemTeleop extends OpMode {
 
         // === Telemetry === //
         updateTelemetry();
+        loopTime.reset();
     }
     private void updateTelemetry() {
         intake.postTelemetry(telemetry);
         sorter.postTelemetry(telemetry);
         turret.postTelemetry(telemetry);
+
+        // === Update Loop Time Tracking ===
+        telemetry.addData("Loop Time (Hz)", 1.0 / loopTime.seconds());
+
+        // === Manual Motor Power Read
+        telemetry.addData("Intake Power: ", intake.intakeMotor.getPower());
+        telemetry.addData("Intake Velocity: ", intake.intakeMotor.getVelocity());
 
         // === Control Reference ===
         telemetry.addLine("=== Controls ===");

@@ -135,6 +135,8 @@ public class CloseBlueMotifTracked___Fixed extends OpMode {
     private boolean emptyDetectionActive = false;
     private static final long EMPTY_DETECT_TIME_MS = 100;
 
+    private ElapsedTime loopTime = new ElapsedTime();
+
     @Override
     public void init() {
         panelsTelemetry = PanelsTelemetry.INSTANCE.getTelemetry();
@@ -400,9 +402,13 @@ public class CloseBlueMotifTracked___Fixed extends OpMode {
         int normPos = normalize(bR.getCurrentPosition());
         double currentRPM = (m3.getVelocity() / TICKS_PER_REV) * 60.0;
 
+        // === Update Loop Time Tracking ===
+        telemetry.addData("Loop Time (Hz)", 1.0 / loopTime.seconds());
+
         telemetry.addData("Ch1/2/3", chamberColors[0] + "/" + chamberColors[1] + "/" + chamberColors[2]);
         telemetry.addData("MOTIF: ", currentMotif);
         telemetry.addData("PATH STATE: ", pathState);
+
         telemetry.update();
 
         panelsTelemetry.debug("Path State", pathState);
