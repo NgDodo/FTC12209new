@@ -82,8 +82,8 @@ public class subsystemTeleop extends OpMode {
 
         // === Update Subsystems === //
         intake.updateIntake(gamepad1);
-        sorter.updateSorter(gamepad1);
-        turret.updateTurret(follower, gamepad1);
+        // sorter.updateSorter(gamepad1);
+        // turret.updateTurret(follower, gamepad1);
 
         // === Telemetry === //
         updateTelemetry();
@@ -91,8 +91,8 @@ public class subsystemTeleop extends OpMode {
     }
     private void updateTelemetry() {
         intake.postTelemetry(telemetry);
-        sorter.postTelemetry(telemetry);
-        turret.postTelemetry(telemetry);
+        // sorter.postTelemetry(telemetry);
+        // turret.postTelemetry(telemetry);
 
         // === Update Loop Time Tracking ===
         telemetry.addData("Loop Time (Hz)", 1.0 / loopTime.seconds());
