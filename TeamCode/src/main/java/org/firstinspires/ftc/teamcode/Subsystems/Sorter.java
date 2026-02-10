@@ -89,7 +89,10 @@ public class Sorter {
         this.intakeColor = hardwareMap.get(RevColorSensorV3.class, "intakeColor");
 
         this.currentMotif = MOTIF.GPP;
+
+        this.lastTime = System.nanoTime();  // ← ADD THIS!
     }
+
 
     public void updateSorter(Gamepad gamepad1) {
         // If not shooting, check auto intake color
@@ -429,7 +432,12 @@ public class Sorter {
         sorterState = sorterStateFSM.SWITCHING_CHAMBERS;
         sorterSettling = false;
         sorterTimer.reset();
+
+        // Reset PID state for new movement
+        lastError = 0.0;  // ← Prevents derivative spike
+        lastTime = System.nanoTime();  // ← Prevents dt calculation issues
     }
+
     public void postTelemetry(Telemetry telemetry) {
         int rawPos = sorterEncoder.getCurrentPosition();
         int normPos = _normalize(rawPos);
