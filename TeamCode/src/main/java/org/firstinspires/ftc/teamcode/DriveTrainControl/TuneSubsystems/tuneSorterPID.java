@@ -33,7 +33,7 @@ public class tuneSorterPID extends OpMode {
     // === PID GAINS (Editable in FTC Dashboard) ===
     public static double kP = 0.002;
     public static double kI = 0.0;
-    public static double kD = 0.00006;
+    public static double kD = 0.0001;
 
     // === Hardware ===
     private DcMotorEx sorterMotor;

@@ -83,7 +83,7 @@ public class subsystemTeleop extends OpMode {
         // === Update Subsystems === //
         intake.updateIntake(gamepad1);
         sorter.updateSorter(gamepad1);
-        turret.updateTurret(follower, gamepad1);
+        // turret.updateTurret(follower, gamepad1);
 
         // === Telemetry === //
         updateTelemetry();

@@ -92,10 +92,10 @@ public class Sorter {
     }
 
     public void updateSorter(Gamepad gamepad1) {
-        // If not moving, nothing to do
-        if (!sorterState.equals(sorterStateFSM.SWITCHING_CHAMBERS)) return;
         // If not shooting, check auto intake color
-        if (sorterState.equals(sorterStateFSM.INTAKE_STATIC)) autoIntakeColorCheck();
+        if (sorterState.equals(sorterStateFSM.INTAKE_STATIC)) {
+            autoIntakeColorCheck();
+        }
 
         ///// ===== If moving: ===== /////
         boolean dpadRightPressed = gamepad1.dpad_right;
@@ -103,6 +103,8 @@ public class Sorter {
         if (sorterState.equals(sorterStateFSM.SWITCHING_CHAMBERS)) {
             updateSorterPIDMove();
         }
+
+
         if (dpadRightPressed && !lastDpadRight) {
             sorterState = sorterStateFSM.SWITCHING_CHAMBERS;
 
@@ -133,7 +135,7 @@ public class Sorter {
         lastY = yPressed;
     }
 
-    private void updateSorterPIDMove() {
+    private int updateSorterPIDMove() {
         // Get current position and calculate error to target
         int pos = _normalize(sorterEncoder.getCurrentPosition());
         int error = _calculateShortestError(pos, sorterTargetPosition);
@@ -166,6 +168,8 @@ public class Sorter {
         power = Math.max(-1.0, Math.min(1.0, power));
 
         sorterMotor.setPower(power);
+
+        return error;
     }
 
     // ========================================================================
@@ -431,7 +435,10 @@ public class Sorter {
         int normPos = _normalize(rawPos);
 
         telemetry.addLine("=== Sorter ===");
+        telemetry.addData("Current Detected Color: ", detectIntakeColor());
+        telemetry.addData("Current Sorter State", sorterState);
         telemetry.addData("Pos", normPos);                                                  // Encoder position
+        telemetry.addData("Target Position", sorterTargetPosition);
         telemetry.addData("Chamber", currentChamber + 1);                                // Current chamber (1-3 for display)
         telemetry.addData("Moving", sorterState.equals(sorterStateFSM.SWITCHING_CHAMBERS)); // Is sorter moving?
 
