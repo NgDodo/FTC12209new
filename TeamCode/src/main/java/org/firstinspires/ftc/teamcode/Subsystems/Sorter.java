@@ -36,8 +36,6 @@ public class Sorter {
     // === Non-blocking sorter movement ===
     private int sorterTargetPosition = 0;
     private ElapsedTime sorterTimer = new ElapsedTime();
-    private ElapsedTime sorterSettleTimer = new ElapsedTime();
-    private boolean sorterSettling = false;
     private static final int COARSE_TOL = 1000;
     private static final double MAX_POWER = 0.55;
     private static final double MIN_POWER = 0.08;
@@ -59,6 +57,7 @@ public class Sorter {
 
     boolean lastDpadRight = false;
     boolean lastY = false;
+    boolean lastX = false;
 
     private ElapsedTime moveTimer = new ElapsedTime();
 
@@ -68,9 +67,9 @@ public class Sorter {
     private long lastTime = 0;
 
     // === PID GAINS (Editable in FTC Dashboard) ===
-    public static double kP = 0.002;
+    public static double kP = 0.001;
     public static double kI = 0.0;
-    public static double kD = 0.00006;
+    public static double kD = 0.000039;
 
     public Sorter(HardwareMap hardwareMap){
         this.sorterState = sorterStateFSM.INTAKE_STATIC;
@@ -89,10 +88,7 @@ public class Sorter {
         this.intakeColor = hardwareMap.get(RevColorSensorV3.class, "intakeColor");
 
         this.currentMotif = MOTIF.GPP;
-
-        this.lastTime = System.nanoTime();  // ← ADD THIS!
     }
-
 
     public void updateSorter(Gamepad gamepad1) {
         // If not shooting, check auto intake color
@@ -103,16 +99,14 @@ public class Sorter {
         ///// ===== If moving: ===== /////
         boolean dpadRightPressed = gamepad1.dpad_right;
 
-        if (sorterState.equals(sorterStateFSM.SWITCHING_CHAMBERS)) {
-            updateSorterPIDMove();
-        }
+        updateSorterPIDMove();
 
 
         if (dpadRightPressed && !lastDpadRight) {
             sorterState = sorterStateFSM.SWITCHING_CHAMBERS;
 
-            currentChamber = nextChamber(currentChamber);
-            rotateChamberColorsClockwise();
+            currentChamber = prevChamber(currentChamber);
+            rotateChamberColorsCounterClockwise();
             int targetPos = getChamberPosition(currentChamber, sorterState.equals(sorterStateFSM.SHOOTING));
             startSorterMove(targetPos);
         }
@@ -134,11 +128,14 @@ public class Sorter {
             }
         }
 
+        ///// ===== Handle Shooting---Full Rotation ===== /////
+        handleFullRotation(gamepad1);
+
         lastDpadRight = dpadRightPressed;
         lastY = yPressed;
     }
 
-    private int updateSorterPIDMove() {
+    private void updateSorterPIDMove() {
         // Get current position and calculate error to target
         int pos = _normalize(sorterEncoder.getCurrentPosition());
         int error = _calculateShortestError(pos, sorterTargetPosition);
@@ -172,22 +169,9 @@ public class Sorter {
 
         sorterMotor.setPower(power);
 
-        return error;
-    }
-
-    // ========================================================================
-    // SORTER MOVEMENT INITIATION
-    // ========================================================================
-
-    /**
-     * Starts a new sorter movement to target position
-     * Resets all movement state variables
-     */
-    private void _startSorterMove(int targetPosition) {
-        sorterTargetPosition = targetPosition;
-        sorterSettling = false;
-        sorterState = sorterStateFSM.SWITCHING_CHAMBERS;
-        sorterTimer.reset();
+        if (Math.abs(error) < 80) {
+            sorterState = sorterStateFSM.INTAKE_STATIC;
+        }
     }
 
     // ========================================================================
@@ -280,9 +264,6 @@ public class Sorter {
      * Uses timed detection to avoid false positives from brief color flashes
      */
     private void autoIntakeColorCheck() {
-        // Don't check while sorter is moving (wait for it to settle)
-        if (sorterState.equals(sorterStateFSM.SWITCHING_CHAMBERS)) return;
-
         String detected = detectIntakeColor();
 
         // No ball detected - reset timer
@@ -301,14 +282,14 @@ public class Sorter {
         // Ball has been detected continuously for required time
         if (System.currentTimeMillis() - colorStartTime >= DETECT_TIME_MS) {
             // Only fill chamber if it's not already full
-            if (!chamberColors[currentChamber].equals("NONE")) {
+            if (chamberColors[0].equals("NONE")) {
                 chamberColors[0] = detected;                  // Mark chamber A color (at intake position)
-                rotateChamberColorsClockwise();
-                currentChamber = nextChamber(currentChamber); // Move to next chamber
+                sorterState = sorterStateFSM.SWITCHING_CHAMBERS;
 
-                // Rotate sorter to position next empty chamber at intake
-                int target = getChamberPosition(currentChamber, false);
-                startSorterMove(target);
+                currentChamber = prevChamber(currentChamber);
+                rotateChamberColorsCounterClockwise();
+                int targetPos = getChamberPosition(currentChamber, false);
+                startSorterMove(targetPos);
             }
 
             // Reset detection timer
@@ -317,11 +298,36 @@ public class Sorter {
         }
     }
     /**
-     * Detects ball color at intake sensor
-     * Analyzes RGB values to determine if ball is green, purple, or not present
-     *
-     * @return "GREEN", "PURPLE", or "NONE"
+     * Rotates the sorter 360 degrees clockwise when X button is pressed
+     * Enters SHOOTING state during the rotation
      */
+    /**
+     * Rotates the sorter 360 degrees clockwise when X button is pressed
+     * Enters SHOOTING state during the rotation
+     */
+    private void handleFullRotation(Gamepad gamepad1) {
+        boolean xPressed = gamepad1.x;
+
+        if (xPressed && !lastX) {
+            sorterState = sorterStateFSM.SHOOTING;
+
+            // Calculate 360 degree clockwise rotation from current position
+            // Don't normalize the target - we want it to be FULL_ROT ticks ahead
+            int currentPos = _normalize(sorterEncoder.getCurrentPosition());
+            int targetPos = currentPos - FULL_ROT;
+            sorterMotor.setPower(-1);
+            startSorterMove(targetPos);
+        }
+
+        lastX = xPressed;
+    }
+
+        /**
+         * Detects ball color at intake sensor
+         * Analyzes RGB values to determine if ball is green, purple, or not present
+         *
+         * @return "GREEN", "PURPLE", or "NONE"
+         */
     private String detectIntakeColor() {
         int r = intakeColor.red();
         int g = intakeColor.green();
@@ -430,14 +436,8 @@ public class Sorter {
     private void startSorterMove(int targetPosition) {
         sorterTargetPosition = targetPosition;
         sorterState = sorterStateFSM.SWITCHING_CHAMBERS;
-        sorterSettling = false;
         sorterTimer.reset();
-
-        // Reset PID state for new movement
-        lastError = 0.0;  // ← Prevents derivative spike
-        lastTime = System.nanoTime();  // ← Prevents dt calculation issues
     }
-
     public void postTelemetry(Telemetry telemetry) {
         int rawPos = sorterEncoder.getCurrentPosition();
         int normPos = _normalize(rawPos);
@@ -449,6 +449,9 @@ public class Sorter {
         telemetry.addData("Target Position", sorterTargetPosition);
         telemetry.addData("Chamber", currentChamber + 1);                                // Current chamber (1-3 for display)
         telemetry.addData("Moving", sorterState.equals(sorterStateFSM.SWITCHING_CHAMBERS)); // Is sorter moving?
+        telemetry.addData("color active", colorActive);
+        telemetry.addData("color start time", colorStartTime);
+        telemetry.addData("current chamber", currentChamber);
 
         // Chamber status: O = full, X = empty
 

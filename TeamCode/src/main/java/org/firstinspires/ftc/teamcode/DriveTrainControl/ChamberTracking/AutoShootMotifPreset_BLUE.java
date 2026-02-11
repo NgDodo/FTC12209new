@@ -94,7 +94,7 @@ public class AutoShootMotifPreset_BLUE extends OpMode {
     private static final long EMPTY_DETECT_TIME_MS = 200;
 
     // === Shooter presets ===
-    private final int[] rpmPresets = {2600, 3300};
+    private final int[] rpmPresets = {2600 * 2, 3300* 2};
     private int presetIndex = -1;
     private double targetRPM = 0;
     private boolean lastRightBumper = false;

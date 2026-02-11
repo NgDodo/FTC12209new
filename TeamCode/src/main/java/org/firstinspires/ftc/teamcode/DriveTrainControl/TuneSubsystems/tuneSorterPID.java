@@ -33,7 +33,7 @@ public class tuneSorterPID extends OpMode {
     // === PID GAINS (Editable in FTC Dashboard) ===
     public static double kP = 0.002;
     public static double kI = 0.0;
-    public static double kD = 0.0001;
+    public static double kD = 0.00006;
 
     // === Hardware ===
     private DcMotorEx sorterMotor;
@@ -91,10 +91,15 @@ public class tuneSorterPID extends OpMode {
         telemetry.update();
     }
 
+    private ElapsedTime loopTime = new ElapsedTime();
+
+
     @Override
     public void start() {
         moveTimer.reset();
         lastTime = System.nanoTime();
+
+        loopTime.reset();
     }
 
     @Override
@@ -111,6 +116,8 @@ public class tuneSorterPID extends OpMode {
 
         // Update telemetry
         updateTelemetry(currentPosition, power);
+        loopTime.reset();
+
     }
 
     /**
@@ -190,7 +197,9 @@ public class tuneSorterPID extends OpMode {
      */
     private void updateTelemetry(int currentPosition, double power) {
         int error = calculateShortestError(currentPosition, targetPosition);
-
+        // === Update Loop Time Tracking ===
+        telemetry.addData("Loop Time (Hz)", 1.0 / loopTime.seconds());
+        telemetry.addLine();
         telemetry.addData("kP", kP);
         telemetry.addData("kI", kI);
         telemetry.addData("kD", kD);
