@@ -2,14 +2,17 @@ package org.firstinspires.ftc.teamcode.Subsystems;
 
 import com.bylazar.configurables.annotations.Configurable;
 import com.qualcomm.hardware.rev.RevColorSensorV3;
+import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.HardwareMap;
+import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.robotcore.external.Telemetry;
-import org.firstinspires.ftc.teamcode.DriveTrainControl.ChamberTracking.AutoShootMotifPreset_BLUE;
+import org.firstinspires.ftc.teamcode.DriveTrainControl.SubsystemTeleop.subsystemTeleop;
 
 @Configurable
 public class Sorter {
@@ -18,10 +21,19 @@ public class Sorter {
         SWITCHING_CHAMBERS, // rotating chambers while in intake mode
         SHOOTING
     }
+
+    private int shootingStartPos = 0;
+    private int primeTarget = 0;
+    private int fireTarget = 0;
+    private int returnTarget = 0;
+
     private RevColorSensorV3 intakeColor;
 
     private DcMotorEx sorterMotor;
     private DcMotorEx sorterEncoder;
+
+    CRServo s3;
+    Servo s2;
 
     public sorterStateFSM sorterState;
     private String[] chamberColors = {"NONE", "NONE", "NONE"};
@@ -36,9 +48,9 @@ public class Sorter {
     // === Non-blocking sorter movement ===
     private int sorterTargetPosition = 0;
     private ElapsedTime sorterTimer = new ElapsedTime();
-    private static final int COARSE_TOL = 1000;
-    private static final double MAX_POWER = 0.55;
-    private static final double MIN_POWER = 0.08;
+    private boolean primePauseStarted = false;
+    private int fireStartPos;
+    private int fireTargetDelta;
 
 
     // === Timed color detection ===
@@ -71,6 +83,18 @@ public class Sorter {
     public static double kI = 0.0;
     public static double kD = 0.000039;
 
+    // === Auto Shoot Sequence ===
+    private int autoShootState = 0;
+    private ElapsedTime autoShootTimer = new ElapsedTime();
+
+    // Auto shoot timing constants (from autonomous)
+    private static final double SHOOT_DURATION = 0.45;
+    private static final double SERVO_RETRACT_DELAY = 0.2;
+    private static final double SORTER_WAIT_TIME = 0.15;
+    private static final double MODE_TOGGLE_WAIT_TIME = 0.75;
+    private int shotsComplete = 0;
+
+
     public Sorter(HardwareMap hardwareMap){
         this.sorterState = sorterStateFSM.INTAKE_STATIC;
         this.sorterMotor = hardwareMap.get(DcMotorEx.class, "m0");
@@ -88,16 +112,24 @@ public class Sorter {
         this.intakeColor = hardwareMap.get(RevColorSensorV3.class, "intakeColor");
 
         this.currentMotif = MOTIF.GPP;
+
+        this.s2 = hardwareMap.get(Servo.class, "s2");
+        this.s3 = hardwareMap.get(CRServo.class, "s3");
+        this.s3.setDirection(DcMotorSimple.Direction.REVERSE);
+        this.s2.setPosition(.68);
     }
 
     public void updateSorter(Gamepad gamepad1) {
+        boolean dpadRightPressed = gamepad1.dpad_right;
+        boolean yPressed = gamepad1.y;
+        boolean xPressed = gamepad1.x;
+
         // If not shooting, check auto intake color
         if (sorterState.equals(sorterStateFSM.INTAKE_STATIC)) {
             autoIntakeColorCheck();
         }
 
         ///// ===== If moving: ===== /////
-        boolean dpadRightPressed = gamepad1.dpad_right;
 
         updateSorterPIDMove();
 
@@ -111,7 +143,15 @@ public class Sorter {
             startSorterMove(targetPos);
         }
 
-        boolean yPressed = gamepad1.y;
+        if (xPressed && !lastX) {
+            autoShootTimer.reset(); // on state switch
+            autoShootState = 0;
+            sorterState = sorterStateFSM.SHOOTING;
+        }
+
+        if (sorterState.equals(sorterStateFSM.SHOOTING)) {
+            updateAutoShootSequence(gamepad1);
+        }
 
         ///// ===== Update Internal MOTIF  ====== /////
         if (yPressed && !lastY) {
@@ -128,16 +168,123 @@ public class Sorter {
             }
         }
 
-        ///// ===== Handle Shooting---Full Rotation ===== /////
-        handleFullRotation(gamepad1);
-
         lastDpadRight = dpadRightPressed;
         lastY = yPressed;
+        lastX = xPressed;
+    }
+
+    /**
+     * Auto shoot sequence - shoots all 3 balls automatically
+     * Based on autonomous shooting sequence
+     */
+    private void updateAutoShootSequence(Gamepad gamepad1) {
+        switch (autoShootState) {
+            case 0: // Wait for mode toggle to complete
+                if (autoShootTimer.seconds() >= MODE_TOGGLE_WAIT_TIME) {
+                    rotateSorterDuringShoot();
+                    rotateChamberColorsClockwise();
+                    autoShootTimer.reset();
+                    autoShootState++;
+                }
+                break;
+
+            case 1: // Wait for sorter rotation
+                if (autoShootTimer.seconds() >= SORTER_WAIT_TIME) {
+                    activateShooter();
+                    autoShootTimer.reset();
+                    autoShootState++;
+                }
+                break;
+
+            case 2: // Shoot ball 1
+                if (autoShootTimer.seconds() >= SHOOT_DURATION) {
+                    deactivateShooter();
+                    shotsComplete++;
+                    chamberColors[0] = "NONE";
+                    autoShootTimer.reset();
+                    autoShootState++;
+                }
+                break;
+
+            case 3: // Wait for servo retract
+                if (autoShootTimer.seconds() >= SERVO_RETRACT_DELAY) {
+                    rotateSorterDuringShoot();
+                    rotateChamberColorsClockwise();
+                    autoShootTimer.reset();
+                    autoShootState++;
+                }
+                break;
+
+            case 4: // Wait for sorter rotation
+                if (autoShootTimer.seconds() >= SORTER_WAIT_TIME) {
+                    activateShooter();
+                    autoShootTimer.reset();
+                    autoShootState++;
+                }
+                break;
+
+            case 5: // Shoot ball 2
+                if (autoShootTimer.seconds() >= SHOOT_DURATION) {
+                    deactivateShooter();
+                    shotsComplete++;
+                    chamberColors[0] = "NONE";
+                    autoShootTimer.reset();
+                    autoShootState++;
+                }
+                break;
+
+            case 6: // Wait for servo retract
+                if (autoShootTimer.seconds() >= SERVO_RETRACT_DELAY) {
+                    rotateSorterDuringShoot();
+                    rotateChamberColorsClockwise();
+                    autoShootTimer.reset();
+                    autoShootState++;
+                }
+                break;
+
+            case 7: // Wait for sorter rotation
+                if (autoShootTimer.seconds() >= SORTER_WAIT_TIME) {
+                    activateShooter();
+                    autoShootTimer.reset();
+                    autoShootState++;
+                }
+                break;
+
+            case 8: // Shoot ball 3
+                if (autoShootTimer.seconds() >= SHOOT_DURATION) {
+                    deactivateShooter();
+                    shotsComplete++;
+                    chamberColors[0] = "NONE";
+                    autoShootTimer.reset();
+                    autoShootState++;
+                }
+                break;
+
+            case 9: // Wait for servo retract, then back to intake mode
+                if (autoShootTimer.seconds() >= SERVO_RETRACT_DELAY) {
+                    autoShootTimer.reset();
+                    autoShootState++;
+                }
+                break;
+
+            case 10: // Wait for mode toggle, then finish
+                if (autoShootTimer.seconds() >= MODE_TOGGLE_WAIT_TIME) {
+                    autoShootState = 0;
+                    gamepad1.rumble(500); // Signal completion
+                }
+                sorterState = sorterStateFSM.INTAKE_STATIC;
+        }
+    }
+    private void rotateSorterDuringShoot() {
+        currentChamber = nextChamber(currentChamber);
+        int target = getChamberPosition(currentChamber, true);
+        startSorterMove(target);
     }
 
     private void updateSorterPIDMove() {
         // Get current position and calculate error to target
-        int pos = _normalize(sorterEncoder.getCurrentPosition());
+        int rawPos = sorterEncoder.getCurrentPosition();
+        int pos = _normalize(rawPos);
         int error = _calculateShortestError(pos, sorterTargetPosition);
 
         // Calculate time delta
@@ -169,9 +316,21 @@ public class Sorter {
 
         sorterMotor.setPower(power);
 
-        if (Math.abs(error) < 80) {
-            sorterState = sorterStateFSM.INTAKE_STATIC;
+        if (sorterState == sorterStateFSM.SWITCHING_CHAMBERS) {
+            if (Math.abs(error) < 80) {
+                sorterState = sorterStateFSM.INTAKE_STATIC;
+            }
         }
+
+    }
+    private void activateShooter() {
+        s2.setPosition(0);
+        s3.setPower(1.0);
+    }
+
+    private void deactivateShooter() {
+        s2.setPosition(0.68);
+        s3.setPower(0.0);
     }
 
     // ========================================================================
@@ -297,32 +456,8 @@ public class Sorter {
             colorStartTime = 0;
         }
     }
+
     /**
-     * Rotates the sorter 360 degrees clockwise when X button is pressed
-     * Enters SHOOTING state during the rotation
-     */
-    /**
-     * Rotates the sorter 360 degrees clockwise when X button is pressed
-     * Enters SHOOTING state during the rotation
-     */
-    private void handleFullRotation(Gamepad gamepad1) {
-        boolean xPressed = gamepad1.x;
-
-        if (xPressed && !lastX) {
-            sorterState = sorterStateFSM.SHOOTING;
-
-            // Calculate 360 degree clockwise rotation from current position
-            // Don't normalize the target - we want it to be FULL_ROT ticks ahead
-            int currentPos = _normalize(sorterEncoder.getCurrentPosition());
-            int targetPos = currentPos - FULL_ROT;
-            sorterMotor.setPower(-1);
-            startSorterMove(targetPos);
-        }
-
-        lastX = xPressed;
-    }
-
-        /**
          * Detects ball color at intake sensor
          * Analyzes RGB values to determine if ball is green, purple, or not present
          *
@@ -435,9 +570,9 @@ public class Sorter {
      */
     private void startSorterMove(int targetPosition) {
         sorterTargetPosition = targetPosition;
-        sorterState = sorterStateFSM.SWITCHING_CHAMBERS;
         sorterTimer.reset();
     }
+
     public void postTelemetry(Telemetry telemetry) {
         int rawPos = sorterEncoder.getCurrentPosition();
         int normPos = _normalize(rawPos);

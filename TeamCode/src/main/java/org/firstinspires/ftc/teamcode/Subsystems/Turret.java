@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode.Subsystems;
 
+import com.bylazar.configurables.annotations.Configurable;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.geometry.Pose;
 import com.qualcomm.hardware.limelightvision.LLResult;
@@ -8,17 +9,20 @@ import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.IMU;
 
 import org.firstinspires.ftc.robotcore.external.Telemetry;
+import org.firstinspires.ftc.teamcode.DriveTrainControl.SubsystemTeleop.subsystemTeleop;
 
 import java.util.List;
 
+@Configurable
 public class Turret {
-    private DcMotorEx turretRotationMotor;
-    private DcMotorEx flywheelMotor;
+    public DcMotorEx turretRotationMotor;
+    public DcMotorEx flywheelMotor;
 
     boolean leftBumperPressed, rightBumperPressed = false;
 
@@ -29,7 +33,7 @@ public class Turret {
     private static final int APRILTAG_PIPELINE = 1;
 
     // === Turret Configuration ===
-    private static final double TURRET_TICKS_PER_REV = 1393.1;
+    public static final double TURRET_TICKS_PER_REV = 1393.1;
 
     // === Tracking Mode ===
     private enum TrackingMode {
@@ -42,22 +46,22 @@ public class Turret {
     private static final double SPINUP_TIME = 0.75;
 
     // === Shooter presets ===
-    private final int[] rpmPresets = {2600, 3300};
+    private final int[] rpmPresets = {3900, 4950};
     private int presetIndex = -1;
-    private double targetRPM = 0;
+    public double targetRPM = 0;
     private boolean lastRightBumper = false;
     private boolean lastLeftBumper = false;
     private boolean lastDpadLeft = false;
     private boolean lastDpadDown = false;
 
-    private static final double TICKS_PER_REV_FLYWHEEL = 28.0;
+    public static final double TICKS_PER_REV_FLYWHEEL = 28.0;
     private static final double RPM_TOLERANCE = 100.0;
 
     // === Flywheel PID ===
-    private double flywheelKp = 0.0012;
-    private double flywheelKi = 0.00001;
-    private double flywheelKd = 0.0;
-    private double flywheelKF = 0.00025;
+    public double flywheelKp = 0.0012;
+    public double flywheelKi = 0.00001;
+    public double flywheelKd = 0.0;
+    public double flywheelKF = 0.00025;
     private double flywheelIntegral = 0;
     private double flywheelLastError = 0;
     private long flywheelLastTime = 0;
@@ -96,7 +100,8 @@ public class Turret {
 
         flywheelLastTime = System.nanoTime();
 
-        flywheelMotor = hardwareMap.get(DcMotorEx.class, "m1");
+        flywheelMotor = hardwareMap.get(DcMotorEx.class, "m3");
+        flywheelMotor.setDirection(DcMotorSimple.Direction.REVERSE);
         turretRotationMotor = hardwareMap.get(DcMotorEx.class, "m2");
 
         // === Turret Setup ===

@@ -26,9 +26,13 @@ public class subsystemTeleop extends OpMode {
     private Follower follower;
     public static Pose startingPose;
 
-    private boolean lastBButton;
+    private boolean lastBButton, lastXButton;
 
     private ElapsedTime loopTime = new ElapsedTime();
+
+    private boolean runTelemetry = false;
+    private ElapsedTime telemetryLimiter = new ElapsedTime();
+
 
     @Override
     public void init() {
@@ -57,6 +61,9 @@ public class subsystemTeleop extends OpMode {
         loopTime.reset();
     }
 
+    public void start() {
+        telemetryLimiter.reset();
+    }
     @Override
     public void loop() {
 
@@ -77,38 +84,61 @@ public class subsystemTeleop extends OpMode {
 
         // === Reset Follower Pose === //
         boolean bPressed = gamepad1.b;
-        if (bPressed && !lastBButton) follower.setPose(new Pose(72, 72, Math.PI / 2));
-        lastBButton = bPressed;
+        // if (bPressed && !lastBButton) follower.setPose(new Pose(72, 72, Math.PI / 2));
+        if (bPressed && !lastBButton) {
+            if (runTelemetry) {
+                runTelemetry = false;
+            } else {
+                runTelemetry = true;
+            }
+        }
+
+
+
 
         // === Update Subsystems === //
         intake.updateIntake(gamepad1);
         sorter.updateSorter(gamepad1);
-        // turret.updateTurret(follower, gamepad1);
+        turret.updateTurret(follower, gamepad1);
 
         // === Telemetry === //
         updateTelemetry();
         loopTime.reset();
+
+        lastBButton = bPressed;
     }
     private void updateTelemetry() {
-        intake.postTelemetry(telemetry);
-        sorter.postTelemetry(telemetry);
-        turret.postTelemetry(telemetry);
+        if (runTelemetry) {
+            intake.postTelemetry(telemetry);
+            sorter.postTelemetry(telemetry);
+            turret.postTelemetry(telemetry);
 
-        // === Update Loop Time Tracking ===
-        telemetry.addData("Loop Time (Hz)", 1.0 / loopTime.seconds());
+            // === Manual Motor Power Read
+            telemetry.addData("Intake Power: ", intake.intakeMotor.getPower());
+            telemetry.addData("Intake Velocity: ", intake.intakeMotor.getVelocity());
 
-        // === Manual Motor Power Read
-        telemetry.addData("Intake Power: ", intake.intakeMotor.getPower());
-        telemetry.addData("Intake Velocity: ", intake.intakeMotor.getVelocity());
+            // === Control Reference ===
+            telemetry.addLine("=== Controls ===");
+            telemetry.addLine("B: Cycle Track Mode");
+            telemetry.addLine("Y: Mode | DpadRight: Chamber");
+            telemetry.addLine("A: Shoot");
+            telemetry.addLine("RB: RPM | LB: 1500 | DpadDown: Off");
+        }
+        if (telemetryLimiter.seconds() > 0.5) {
+            // === Update Loop Time Tracking ===
+            telemetry.addData("Loop Time (Hz)", 1.0 / loopTime.seconds());
 
-        // === Control Reference ===
-        telemetry.addLine("=== Controls ===");
-        telemetry.addLine("B: Cycle Track Mode");
-        telemetry.addLine("Y: Mode | DpadRight: Chamber");
-        telemetry.addLine("A: Shoot");
-        telemetry.addLine("RB: RPM | LB: 1500 | DpadDown: Off");
+            telemetry.addData("Sorter State", sorter.sorterState);
+            double currentRPM = (turret.flywheelMotor.getVelocity() / turret.TICKS_PER_REV_FLYWHEEL) * 60.0;
+            double rpmError = Math.abs(turret.targetRPM - currentRPM);
 
-        telemetry.update();
+            telemetry.addLine("=== Shooter ===");
+            telemetry.addData("Target RPM", turret.targetRPM);
+            telemetry.addData("Actual RPM", String.format("%.0f", currentRPM));
+            telemetry.update();
+            telemetryLimiter.reset();
+        }
+
     }
     private double clipLowPower(double p) {
         return Math.abs(p) < 0.04 ? 0 : p;
@@ -116,4 +146,7 @@ public class subsystemTeleop extends OpMode {
     private double applyDeadzone(double v) {
         return Math.abs(v) < 0.05 ? 0 : v;
     }
+
+
+
 }

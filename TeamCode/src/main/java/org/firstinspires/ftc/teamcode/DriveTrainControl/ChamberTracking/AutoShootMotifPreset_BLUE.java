@@ -17,6 +17,7 @@ import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
+import org.firstinspires.ftc.teamcode.Subsystems.Sorter;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 import java.util.List;
@@ -72,12 +73,15 @@ public class AutoShootMotifPreset_BLUE extends OpMode {
     private boolean sorterMoving = false;
     private int sorterTargetPosition = 0;
     private ElapsedTime sorterTimer = new ElapsedTime();
-    private ElapsedTime sorterSettleTimer = new ElapsedTime();
-    private boolean sorterSettling = false;
-    private static final int COARSE_TOL = 1000;
-    private static final double MAX_POWER = 0.55;
-    private static final double MIN_POWER = 0.08;
-    private static final long SORTER_TIMEOUT_MS = 2000;
+    // === PID State ===
+    private double integral = 0.0;
+    private double lastError = 0.0;
+    private long lastTime = 0;
+
+    // === PID GAINS (Editable in FTC Dashboard) ===
+    public static double kP = 0.001;
+    public static double kI = 0.0;
+    public static double kD = 0.000039;
 
     private boolean lastXButton = false;
     private boolean distanceBasedRPM = false;
@@ -165,6 +169,10 @@ public class AutoShootMotifPreset_BLUE extends OpMode {
     private MOTIF currentMotif;
 
     private ElapsedTime loopTime = new ElapsedTime();
+
+    private boolean runTelemetry = false;
+    private ElapsedTime telemetryLimiter = new ElapsedTime();
+
     @Override
     public void init() {
         startingPose = new Pose(72, 72, Math.toRadians(90));
@@ -267,7 +275,6 @@ public class AutoShootMotifPreset_BLUE extends OpMode {
         boolean bPressed = gamepad1.b;
         if (bPressed && !lastBButton) {
             follower.setPose(new Pose(72, 72, Math.PI / 2));
-
         }
         lastBButton = bPressed;
 
@@ -329,12 +336,6 @@ public class AutoShootMotifPreset_BLUE extends OpMode {
 
                 // 4. Move turret to track the goal
                 double error = moveTurretToOffset(m2, turretDesiredRelativeOffset);
-
-                telemetry.addData("Angle to Goal", "%.1f°", Math.toDegrees(angle_to_goal));
-                telemetry.addData("Rotations to Goal", "%.2f", Math.toDegrees(angle_to_goal) / 360.0);
-                telemetry.addData("Turret Relative Offset", "%.1f°", Math.toDegrees(turretDesiredRelativeOffset));
-                telemetry.addData("Turret Rotations Error", error);
-                telemetry.addData("Turret Rotations", "%.2f", m2.getCurrentPosition() / TICKS_PER_REV);
             }
         } else {
             // Tracking OFF - hold position
@@ -380,7 +381,7 @@ public class AutoShootMotifPreset_BLUE extends OpMode {
         lastDpadRight = dpadRightPressed;
         lastDpadLeft = dpadLeftPressed;
 
-        updateSorterMovement();
+        updateSorterPIDMove();
 
         // ====================================================================
         // COLOR DETECTION
@@ -537,9 +538,6 @@ public class AutoShootMotifPreset_BLUE extends OpMode {
 
         updateRPMLED();
 
-        // === Manual Motor Power Read
-        telemetry.addData("Intake Power: ", m1.getPower());
-        telemetry.addData("Intake Velocity: ", m1.getVelocity());
         // Update driver station telemetry
         updateTelemetry(normPos, shooterColorDetected);
 
@@ -628,73 +626,43 @@ public class AutoShootMotifPreset_BLUE extends OpMode {
      * This is called every loop iteration to continue movement
      * Uses proportional control with settling time for accuracy
      */
-    private void updateSorterMovement() {
-        // If not moving, nothing to do
+    private void updateSorterPIDMove() {
         if (!sorterMoving) return;
 
         // Get current position and calculate error to target
-        int pos = normalize(backRightMotor.getCurrentPosition());
+        int rawPos = backRightMotor.getCurrentPosition();
+        int pos = normalize(rawPos);
         int error = calculateShortestError(pos, sorterTargetPosition);
 
-        // Safety timeout - stop if movement takes too long (2 seconds)
-        if (sorterTimer.milliseconds() > SORTER_TIMEOUT_MS) {
-            m0.setPower(0);
-            sorterMoving = false;
-            sorterSettling = false;
-            return;
+
+        // Calculate time delta
+        long currentTime = System.nanoTime();
+        double dt = (currentTime - lastTime) / 1e9;
+        lastTime = currentTime;
+
+        if (dt <= 0 || dt > 0.1) {
+            dt = 0.02;
         }
 
-        // Tighter tolerances for faster completion
-        int FAST_PERFECT_TOL = 50;   // Within 50 ticks = close enough
-        int FAST_FINE_TOL = 100;     // Within 100 ticks = fine positioning
+        // PID terms
+        double pTerm = kP * error;
 
-        // ===== SETTLING PHASE =====
-        // When very close to target, enter settling phase
-        if (Math.abs(error) <= FAST_PERFECT_TOL) {
-            if (!sorterSettling) {
-                // Just entered settling phase
-                sorterSettling = true;
-                sorterSettleTimer.reset();
-                m0.setPower(0);  // Stop motor to settle
-            }
+        integral += error * dt;
+        integral = Math.max(-5000, Math.min(5000, integral)); // Anti-windup
+        double iTerm = kI * integral;
 
-            // Wait for settle time to ensure position is stable
-            long FAST_SETTLE_MS = 30;  // 30ms settle time
-            if (sorterSettleTimer.milliseconds() >= FAST_SETTLE_MS) {
-                // Successfully settled at target position
-                m0.setPower(0);
-                sorterMoving = false;
-                sorterSettling = false;
-                return;
-            }
+        double derivative = (error - lastError) / dt;
+        double dTerm = kD * derivative;
 
-            // If error increases during settling, exit settling phase
-            if (Math.abs(error) > FAST_FINE_TOL) {
-                sorterSettling = false;
-            } else {
-                return;  // Still settling, wait
-            }
-        } else {
-            sorterSettling = false;  // Too far from target for settling
-        }
+        lastError = error;
 
-        // ===== PROPORTIONAL SPEED CONTROL =====
-        double power;
-        int absError = Math.abs(error);
+        // Total output
+        double power = pTerm + iTerm + dTerm;
 
-        if (absError > COARSE_TOL) {
-            // Far from target: use maximum power
-            power = MAX_POWER;
-        } else {
-            // Close to target: slow down proportionally
-            // ratio goes from 1.0 (at COARSE_TOL) to 0.0 (at target)
-            double ratio = (double) absError / COARSE_TOL;
-            power = MIN_POWER + (MAX_POWER - MIN_POWER) * ratio;
-            power = Math.max(MIN_POWER, Math.min(MAX_POWER, power));
-        }
+        // Clamp output
+        power = Math.max(-1.0, Math.min(1.0, power));
 
-        // Apply power with correct direction (sign of error)
-        m0.setPower(Math.signum(error) * power);
+        m0.setPower(power);
     }
 
     // ========================================================================
@@ -708,7 +676,6 @@ public class AutoShootMotifPreset_BLUE extends OpMode {
     private void startSorterMove(int targetPosition) {
         sorterTargetPosition = targetPosition;
         sorterMoving = true;
-        sorterSettling = false;
         sorterTimer.reset();
     }
 
@@ -1119,50 +1086,57 @@ public class AutoShootMotifPreset_BLUE extends OpMode {
     }
 
     private void updateTelemetry(int normPos, String shooterColorDetected) {
-        // Calculate flywheel status
-        double currentRPM = (m3.getVelocity() / TICKS_PER_REV_FLYWHEEL) * 60.0;
-        double rpmError = Math.abs(targetRPM - currentRPM);
-        boolean rpmReady = (targetRPM > 0) && (rpmError <= RPM_TOLERANCE);
+        if (runTelemetry) {
+            // Calculate flywheel status
+            double currentRPM = (m3.getVelocity() / TICKS_PER_REV_FLYWHEEL) * 60.0;
+            double rpmError = Math.abs(targetRPM - currentRPM);
+            boolean rpmReady = (targetRPM > 0) && (rpmError <= RPM_TOLERANCE);
 
-        telemetry.addLine("=== Tracking Mode (B) ===");
-        telemetry.addLine();
+            telemetry.addLine("=== Tracking Mode (B) ===");
+            telemetry.addLine();
 
-        // === Sorter Status ===
-        telemetry.addLine("=== Sorter ===");
-        telemetry.addData("Pos", normPos);                      // Encoder position
-        telemetry.addData("Chamber", currentChamber + 1);       // Current chamber (1-3 for display)
-        telemetry.addData("Moving", sorterMoving);              // Is sorter moving?
+            // === Sorter Status ===
+            telemetry.addLine("=== Sorter ===");
+            telemetry.addData("Pos", normPos);                      // Encoder position
+            telemetry.addData("Chamber", currentChamber + 1);       // Current chamber (1-3 for display)
+            telemetry.addData("Moving", sorterMoving);              // Is sorter moving?
 
-        // Chamber status: O = full, X = empty
+            // Chamber status: O = full, X = empty
 
-        String ch1 = chamberFull[0] ? chamberColors[0] : "X";
-        String ch2 = chamberFull[1] ? chamberColors[1] : "X";
-        String ch3 = chamberFull[2] ? chamberColors[2] : "X";
-        telemetry.addData("Ch1/2/3", chamberColors[0] + "/" + chamberColors[1] + "/" + chamberColors[2]);
-        telemetry.addData("Current Motif State: ", currentMotif);
-        telemetry.addData("Mode", shootingMode ? "SHOOT (Y)" : "INTAKE (Y)");
-        telemetry.addData("Color", shooterColorDetected);       // Color at shooter
-        telemetry.addLine();
+            String ch1 = chamberFull[0] ? chamberColors[0] : "X";
+            String ch2 = chamberFull[1] ? chamberColors[1] : "X";
+            String ch3 = chamberFull[2] ? chamberColors[2] : "X";
+            telemetry.addData("Ch1/2/3", chamberColors[0] + "/" + chamberColors[1] + "/" + chamberColors[2]);
+            telemetry.addData("Current Motif State: ", currentMotif);
+            telemetry.addData("Mode", shootingMode ? "SHOOT (Y)" : "INTAKE (Y)");
+            telemetry.addData("Color", shooterColorDetected);       // Color at shooter
+            telemetry.addLine();
 
-        // === Shooter Status ===
-        telemetry.addLine("=== Shooter ===");
-        telemetry.addData("Target RPM", targetRPM);
-        telemetry.addData("Actual RPM", String.format("%.0f", currentRPM));
-        telemetry.addData("Ready", rpmReady ? "YES" : "NO");    // Is flywheel at speed?
-        telemetry.addData("Shooter", gamepad1.a ? "FIRING" : "Ready");
-        telemetry.addData("Distance Mode", distanceBasedRPM ? "AUTO (X)" : "MANUAL (X)");
-        telemetry.addLine();
+            // === Shooter Status ===
+            telemetry.addLine("=== Shooter ===");
+            telemetry.addData("Target RPM", targetRPM);
+            telemetry.addData("Actual RPM", String.format("%.0f", currentRPM));
+            telemetry.addData("Ready", rpmReady ? "YES" : "NO");    // Is flywheel at speed?
+            telemetry.addData("Shooter", gamepad1.a ? "FIRING" : "Ready");
+            telemetry.addData("Distance Mode", distanceBasedRPM ? "AUTO (X)" : "MANUAL (X)");
+            telemetry.addLine();
 
-        // === Control Reference ===
-        telemetry.addLine("=== Controls ===");
-        telemetry.addLine("B: Cycle Track Mode");
-        telemetry.addLine("Y: Mode | DpadRight: Chamber");
-        telemetry.addLine("A: Shoot");
-        telemetry.addLine("RB: RPM | LB: 1500 | DpadDown: Off");
+            // === Control Reference ===
+            telemetry.addLine("=== Controls ===");
+            telemetry.addLine("B: Cycle Track Mode");
+            telemetry.addLine("Y: Mode | DpadRight: Chamber");
+            telemetry.addLine("A: Shoot");
+            telemetry.addLine("RB: RPM | LB: 1500 | DpadDown: Off");
 
-        telemetry.addData("Loop Time: ", 1.0 / loopTime.seconds());
+            telemetry.addData("Loop Time: ", 1.0 / loopTime.seconds());
+        }
+        if (telemetryLimiter.seconds() > 0.5) {
+            // === Update Loop Time Tracking ===
+            telemetry.addData("Loop Time (Hz)", 1.0 / loopTime.seconds());
 
-        telemetry.update();
+            telemetry.update();
+            telemetryLimiter.reset();
+        }
     }
 
     // === Turret Movement Helper ===
