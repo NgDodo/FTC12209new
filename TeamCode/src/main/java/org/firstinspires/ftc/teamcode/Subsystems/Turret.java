@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode.Subsystems;
 
+import com.acmerobotics.dashboard.config.Config;
 import com.bylazar.configurables.annotations.Configurable;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.geometry.Pose;
@@ -15,14 +16,23 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.IMU;
 
 import org.firstinspires.ftc.robotcore.external.Telemetry;
-import org.firstinspires.ftc.teamcode.DriveTrainControl.SubsystemTeleop.subsystemTeleop;
 
 import java.util.List;
 
+@Config
 @Configurable
 public class Turret {
-    public DcMotorEx turretRotationMotor;
-    public DcMotorEx flywheelMotor;
+    // === Flywheel PID ===
+    public static double flywheelKp = 0.0022;
+    public static double flywheelKi = 0.00001;
+    public static double flywheelKd = 0.0;
+    public static double flywheelKF = 0.00025;
+    private double flywheelIntegral = 0;
+    private double flywheelLastError = 0;
+    private long flywheelLastTime = 0;
+
+    private DcMotorEx turretRotationMotor;
+    private DcMotorEx flywheelMotor;
 
     boolean leftBumperPressed, rightBumperPressed = false;
 
@@ -34,6 +44,8 @@ public class Turret {
 
     // === Turret Configuration ===
     public static final double TURRET_TICKS_PER_REV = 1393.1;
+
+    public boolean limelightTracking = false;
 
     // === Tracking Mode ===
     private enum TrackingMode {
@@ -56,15 +68,6 @@ public class Turret {
 
     public static final double TICKS_PER_REV_FLYWHEEL = 28.0;
     private static final double RPM_TOLERANCE = 100.0;
-
-    // === Flywheel PID ===
-    public double flywheelKp = 0.0012;
-    public double flywheelKi = 0.00001;
-    public double flywheelKd = 0.0;
-    public double flywheelKF = 0.00025;
-    private double flywheelIntegral = 0;
-    private double flywheelLastError = 0;
-    private long flywheelLastTime = 0;
 
     private TrackingMode currentTrackingMode = TrackingMode.LIMELIGHT_AND_ODOMETRY;
     private boolean lastBButton = false;
@@ -157,7 +160,9 @@ public class Turret {
     }
 
     private void updateTurretRotation(Follower follower) {
-        boolean limelightTracking = false;
+        /// TODO: make turret PID controlled
+
+        limelightTracking = false;
 
         // Try Limelight tracking first (if AprilTag visible)
         LLResult result = limelight.getLatestResult();
@@ -193,22 +198,22 @@ public class Turret {
             double turretDesiredRelativeOffset = normalizeAngle(-angle_to_goal + follower.getHeading() + Math.PI);
 
             // 4. Move turret to track the goal
-            moveTurretToOffset(turretRotationMotor, turretDesiredRelativeOffset);
+            moveTurretToOffset(turretDesiredRelativeOffset);
         }
     }
     /**
      * Moves turret to desired offset angle (odometry-based tracking)
      */
-    private double moveTurretToOffset(DcMotorEx turretMotor, double turretDesiredRelativeOffset) {
+    private double moveTurretToOffset(double turretDesiredRelativeOffset) {
         double turretDesiredDegrees = Math.toDegrees(turretDesiredRelativeOffset);
-        double turretRotations = turretMotor.getCurrentPosition() / TURRET_TICKS_PER_REV;
+        double turretRotations = turretRotationMotor.getCurrentPosition() / TURRET_TICKS_PER_REV;
         double desiredRotations = turretDesiredDegrees / 360.0;
         double error = desiredRotations - turretRotations;
 
-        if (Math.abs(error) > 0.015) { // 0.02 rotations tolerance
-            turretMotor.setPower(error / Math.abs(error) * 0.2);
+        if (Math.abs(error) > 0.015) { // 0.015 rotations tolerance
+            turretRotationMotor.setPower(error / Math.abs(error) * 0.2);
         } else {
-            turretMotor.setPower(0);
+            turretRotationMotor.setPower(0);
         }
         return error;
     }
@@ -233,5 +238,9 @@ public class Turret {
         telemetry.addData("Actual RPM", String.format("%.0f", currentRPM));
         telemetry.addData("Ready", rpmReady ? "YES" : "NO");    // Is flywheel at speed?
         telemetry.addLine();
+    }
+
+    public DcMotorEx getFlywheelMotor (){
+        return flywheelMotor;
     }
 }

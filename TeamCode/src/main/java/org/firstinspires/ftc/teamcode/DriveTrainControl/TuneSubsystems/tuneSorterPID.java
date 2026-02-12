@@ -26,7 +26,6 @@ import com.qualcomm.robotcore.util.ElapsedTime;
  * Y: Toggle Shooting Mode (+180° offset)
  */
 @Config
-@Configurable
 @TeleOp(name = "Sorter PID Tuner (Dashboard)", group = "Tuning")
 public class tuneSorterPID extends OpMode {
 

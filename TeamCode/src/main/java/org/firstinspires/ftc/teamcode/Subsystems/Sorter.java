@@ -14,18 +14,12 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 import org.firstinspires.ftc.robotcore.external.Telemetry;
 import org.firstinspires.ftc.teamcode.DriveTrainControl.SubsystemTeleop.subsystemTeleop;
 
-@Configurable
 public class Sorter {
     public enum sorterStateFSM {
         INTAKE_STATIC, // in intake mode, not moving
         SWITCHING_CHAMBERS, // rotating chambers while in intake mode
         SHOOTING
     }
-
-    private int shootingStartPos = 0;
-    private int primeTarget = 0;
-    private int fireTarget = 0;
-    private int returnTarget = 0;
 
     private RevColorSensorV3 intakeColor;
 
