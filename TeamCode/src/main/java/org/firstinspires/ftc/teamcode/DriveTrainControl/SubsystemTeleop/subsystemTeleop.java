@@ -127,7 +127,7 @@ public class subsystemTeleop extends OpMode {
         if (telemetryLimiter.seconds() > 0.5) {
             // === Update Loop Time Tracking ===
             telemetry.addData("Loop Time (Hz)", 1.0 / loopTime.seconds());
-
+            telemetry.addData("Position", follower.getPose());
             telemetry.addData("Sorter State", sorter.sorterState);
             double currentRPM = (turret.getFlywheelMotor().getVelocity() / turret.TICKS_PER_REV_FLYWHEEL) * 60.0;
             double rpmError = Math.abs(turret.targetRPM - currentRPM);
@@ -136,6 +136,7 @@ public class subsystemTeleop extends OpMode {
             telemetry.addData("Target RPM", turret.targetRPM);
             telemetry.addData("Actual RPM", String.format("%.0f", currentRPM));
             telemetry.addData("Limelight Tracking? ", turret.limelightTracking);
+
             telemetry.update();
             telemetryLimiter.reset();
         }

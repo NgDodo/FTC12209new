@@ -30,7 +30,7 @@ public class Sorter {
     Servo s2;
 
     public sorterStateFSM sorterState;
-    private String[] chamberColors = {"NONE", "NONE", "NONE"};
+    public String[] chamberColors = {"NONE", "NONE", "NONE"};
     private enum MOTIF {
         GPP,
         PGP,
@@ -138,9 +138,7 @@ public class Sorter {
         }
 
         if (xPressed && !lastX) {
-            autoShootTimer.reset(); // on state switch
-            autoShootState = 0;
-            sorterState = sorterStateFSM.SHOOTING;
+            startShootingSequence();
         }
 
         if (sorterState.equals(sorterStateFSM.SHOOTING)) {
@@ -449,8 +447,15 @@ public class Sorter {
             colorActive = false;
             colorStartTime = 0;
         }
+
     }
 
+    public boolean allChambersFull() {
+        if (chamberColors[0].equals("NONE") || chamberColors[1].equals("NONE") || chamberColors[2].equals("NONE")) {
+            return false;
+        }
+        return true;
+    }
     /**
          * Detects ball color at intake sensor
          * Analyzes RGB values to determine if ball is green, purple, or not present
@@ -565,6 +570,12 @@ public class Sorter {
     private void startSorterMove(int targetPosition) {
         sorterTargetPosition = targetPosition;
         sorterTimer.reset();
+    }
+
+    public void startShootingSequence() {
+        autoShootTimer.reset(); // on state switch
+        autoShootState = 0;
+        sorterState = sorterStateFSM.SHOOTING;
     }
 
     public void postTelemetry(Telemetry telemetry) {

@@ -113,6 +113,10 @@ public class Turret {
         turretRotationMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
     }
 
+    public void updateTurret(Follower follower) {
+        updateTurretRotation(follower);
+        updateFlywheelSpeed(follower);
+    }
     public void updateTurret(Follower follower, Gamepad gamepad1) {
         leftBumperPressed = gamepad1.left_bumper;
         rightBumperPressed = gamepad1.right_bumper;
@@ -238,6 +242,18 @@ public class Turret {
         telemetry.addData("Actual RPM", String.format("%.0f", currentRPM));
         telemetry.addData("Ready", rpmReady ? "YES" : "NO");    // Is flywheel at speed?
         telemetry.addLine();
+    }
+
+    public void setFlywheelRPM(String shootingLocation) {
+        if (shootingLocation.equals("FAR")) {
+            targetRPM = rpmPresets[1];
+        }
+        else {
+            targetRPM = rpmPresets[0];
+        }
+    }
+    public void stopFlywheel() {
+        targetRPM = 0;
     }
 
     public DcMotorEx getFlywheelMotor (){

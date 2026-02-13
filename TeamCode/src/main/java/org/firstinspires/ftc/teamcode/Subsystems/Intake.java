@@ -2,6 +2,7 @@ package org.firstinspires.ftc.teamcode.Subsystems;
 
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.util.ElapsedTime;
@@ -25,7 +26,7 @@ public class Intake {
         this.intakeMotor = hardwareMap.get(DcMotorEx.class, "m1");
         this.intakeMotor.setZeroPowerBehavior(DcMotorEx.ZeroPowerBehavior.BRAKE);
         this.intakeMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-
+        this.intakeMotor.setDirection(DcMotorSimple.Direction.REVERSE);
         this.intakePower = 0;
 
     }
