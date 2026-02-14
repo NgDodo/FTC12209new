@@ -139,9 +139,10 @@ public class FSMControlledCloseRed extends OpMode {
     }
 
     public int autonomousPathUpdateFull() {
+        boolean followerBusy = follower.isBusy();
         switch (pathState) {
             case 0: // Move to shooting position
-                if (!follower.isBusy() && pathTimer.seconds() > 3.0) {
+                if (!followerBusy && pathTimer.seconds() > 3.0) {
                     sorter.startShootingSequence(); // start shooting
                     pathState = 101; // goes to shooting sequence
                     pathTimer.reset();
@@ -159,7 +160,7 @@ public class FSMControlledCloseRed extends OpMode {
                 }
                 break;
             case 102: // line up to artifact row 2, wait
-                if (!follower.isBusy() && pathTimer.seconds() > 3.0) { // wait until lined up to row 2
+                if (!followerBusy && pathTimer.seconds() > 3.0) { // wait until lined up to row 2
                     follower.followPath(Path3);
                     pathState = 200; // Continue to Path 2
                     pathTimer.reset();
@@ -167,10 +168,10 @@ public class FSMControlledCloseRed extends OpMode {
                 break;
             case 200: // intake over row 2, exit when (path finished + pathtimer exceeds max allowed time)
                         // OR (if all chamber colors are filled with a color)
-                if (lastFollowerBusyState && !follower.isBusy()) { // just finished path
+                if (lastFollowerBusyState && !followerBusy) { // just finished path
                     pathTimer.reset();
                 }
-                if (!follower.isBusy() && pathTimer.seconds() > 3.0) { // delay of 3 seconds, if balls are not intaken by then
+                if (!followerBusy && pathTimer.seconds() > 3.0) { // delay of 3 seconds, if balls are not intaken by then
                     follower.followPath(Path4); // give up, go to shooting spot
                     intake.intakeState = Intake.intakeStateFSM.INTAKE_STOP;
                     pathState = 201;
@@ -187,7 +188,7 @@ public class FSMControlledCloseRed extends OpMode {
             /// INTAKE + SHOOT ROW 2 ARTIFACTS (2)
 
             case 201: // moving back to shooting spot
-                if (!follower.isBusy()) { // once we reach shooting spot
+                if (!followerBusy) { // once we reach shooting spot
                     // initiate shooting set #2
                     sorter.startShootingSequence(); // start shooting
                     pathState = 202; // go to shooting set 2
@@ -202,7 +203,7 @@ public class FSMControlledCloseRed extends OpMode {
                 }
                 break;
             case 300:
-                if (!follower.isBusy()) {
+                if (!followerBusy) {
                     pathState = 301; // has reached the classifier + has opened it, should intake balls now
                     intake.intakeState = Intake.intakeStateFSM.INTAKE_IN; // turn on intake
                     pathTimer.reset();
@@ -224,7 +225,7 @@ public class FSMControlledCloseRed extends OpMode {
                 }
                 break;
             case 302:
-                if (!follower.isBusy()) { // after reaching shooting spot, shoot
+                if (!followerBusy) { // after reaching shooting spot, shoot
                     // initiate shooting set #3
                     sorter.startShootingSequence(); // start shooting set 3
                     pathState = 303;
@@ -240,11 +241,11 @@ public class FSMControlledCloseRed extends OpMode {
                 break;
                 /// INTAKE + SHOOT ROW 1 ARTIFACTS (4)
             case 400:
-                if (!follower.isBusy()) {
+                if (!followerBusy) {
                     if (lastFollowerBusyState && !follower.isBusy()) { // just finished path
                         pathTimer.reset();
                     }
-                    if (!follower.isBusy() && pathTimer.seconds() > 3.0) { // delay of 3 seconds, if balls are not intaken by then
+                    if (!followerBusy && pathTimer.seconds() > 3.0) { // delay of 3 seconds, if balls are not intaken by then
                         follower.followPath(Path8); // give up, go to shooting spot
                         intake.intakeState = Intake.intakeStateFSM.INTAKE_STOP;
                         pathState = 401;
@@ -259,7 +260,7 @@ public class FSMControlledCloseRed extends OpMode {
                 }
                 break;
             case 401:
-                if (!follower.isBusy()) { // once we reach shooting spot
+                if (!followerBusy) { // once we reach shooting spot
                     // initiate shooting set #4
                     sorter.startShootingSequence(); // start shooting
                     pathState = 402; // go to shooting set 4
@@ -277,7 +278,7 @@ public class FSMControlledCloseRed extends OpMode {
                 //end
                 break;
         }
-        lastFollowerBusyState = follower.isBusy();
+        lastFollowerBusyState = followerBusy;
         return pathState;
     }
 

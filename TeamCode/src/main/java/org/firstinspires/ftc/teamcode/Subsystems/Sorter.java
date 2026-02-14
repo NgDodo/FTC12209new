@@ -88,6 +88,7 @@ public class Sorter {
     private static final double MODE_TOGGLE_WAIT_TIME = 0.75;
     private int shotsComplete = 0;
 
+    private static Gamepad gamepad1;
 
     public Sorter(HardwareMap hardwareMap){
         this.sorterState = sorterStateFSM.INTAKE_STATIC;
