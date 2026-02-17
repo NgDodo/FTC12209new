@@ -1,6 +1,5 @@
 package org.firstinspires.ftc.teamcode.Subsystems;
 
-import com.bylazar.configurables.annotations.Configurable;
 import com.qualcomm.hardware.rev.RevColorSensorV3;
 import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
@@ -12,7 +11,6 @@ import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.robotcore.external.Telemetry;
-import org.firstinspires.ftc.teamcode.DriveTrainControl.SubsystemTeleop.subsystemTeleop;
 
 public class Sorter {
     public enum sorterStateFSM {
@@ -37,14 +35,11 @@ public class Sorter {
         PPG
     }
 
-    private MOTIF currentMotif;
+    public MOTIF currentMotif;
 
     // === Non-blocking sorter movement ===
     private int sorterTargetPosition = 0;
     private ElapsedTime sorterTimer = new ElapsedTime();
-    private boolean primePauseStarted = false;
-    private int fireStartPos;
-    private int fireTargetDelta;
 
 
     // === Timed color detection ===
@@ -63,7 +58,7 @@ public class Sorter {
 
     boolean lastDpadRight = false;
     boolean lastY = false;
-    boolean lastX = false;
+    boolean lastA = false;
 
     private ElapsedTime moveTimer = new ElapsedTime();
 
@@ -87,6 +82,10 @@ public class Sorter {
     private static final double SORTER_WAIT_TIME = 0.15;
     private static final double MODE_TOGGLE_WAIT_TIME = 0.75;
     private int shotsComplete = 0;
+
+    // Feedback LEDs
+    private Servo chambersFull_LED, currentSorterAColor_LED;
+    private double oscillating_LED_color = 0.0;
 
     private static Gamepad gamepad1;
 
@@ -112,12 +111,15 @@ public class Sorter {
         this.s3 = hardwareMap.get(CRServo.class, "s3");
         this.s3.setDirection(DcMotorSimple.Direction.REVERSE);
         this.s2.setPosition(.68);
+
+        this.chambersFull_LED = hardwareMap.get(Servo.class, "led1");
+        this.currentSorterAColor_LED = hardwareMap.get(Servo.class, "led2");
     }
 
     public void updateSorter(Gamepad gamepad1) {
         boolean dpadRightPressed = gamepad1.dpad_right;
         boolean yPressed = gamepad1.y;
-        boolean xPressed = gamepad1.x;
+        boolean aPressed = gamepad1.a;
 
         // If not shooting, check auto intake color
         if (sorterState.equals(sorterStateFSM.INTAKE_STATIC)) {
@@ -138,7 +140,7 @@ public class Sorter {
             startSorterMove(targetPos);
         }
 
-        if (xPressed && !lastX) {
+        if (aPressed && !lastA) {
             startShootingSequence();
         }
 
@@ -161,9 +163,35 @@ public class Sorter {
             }
         }
 
+        ///// ===== Update LED Feedback ====== /////
+        updateChambersFullLED();
+
         lastDpadRight = dpadRightPressed;
         lastY = yPressed;
-        lastX = xPressed;
+        lastA = aPressed;
+    }
+
+    private void updateChambersFullLED() {
+        if (allChambersFull()) {
+            this.oscillating_LED_color += 0.005;
+            if (this.oscillating_LED_color > 0.722) {
+                this.oscillating_LED_color = 0.277;
+            }
+            this.chambersFull_LED.setPosition(oscillating_LED_color);
+        }
+        else {
+            this.chambersFull_LED.setPosition(0.0);
+        }
+    }
+
+    private void updateCurrentSorterALED(String color) {
+        if (color.equals("GREEN")) {
+            this.currentSorterAColor_LED.setPosition(0.5);    // Green light
+        } else if (color.equals("PURPLE")) {
+            this.currentSorterAColor_LED.setPosition(0.722);  // Purple light
+        } else {
+            this.currentSorterAColor_LED.setPosition(0);      // Off (no ball detected)
+        }
     }
 
     /**
@@ -172,6 +200,8 @@ public class Sorter {
      */
     private void updateAutoShootSequence(Gamepad gamepad1) {
         switch (autoShootState) {
+            case -1:
+                break; // still auto aligning colors for motif
             case 0: // Wait for mode toggle to complete
                 if (autoShootTimer.seconds() >= MODE_TOGGLE_WAIT_TIME) {
                     rotateSorterDuringShoot();
@@ -264,13 +294,17 @@ public class Sorter {
                 if (autoShootTimer.seconds() >= MODE_TOGGLE_WAIT_TIME) {
                     autoShootState = 0;
                     gamepad1.rumble(500); // Signal completion
+
+                    sorterState = sorterStateFSM.INTAKE_STATIC;
+
+                    rotateSorterDuringShoot();
+                    rotateChamberColorsClockwise();
                 }
-                sorterState = sorterStateFSM.INTAKE_STATIC;
         }
     }
     private void rotateSorterDuringShoot() {
         currentChamber = nextChamber(currentChamber);
-        int target = getChamberPosition(currentChamber, true);
+        int target = getChamberPosition(currentChamber, sorterState.equals(sorterStateFSM.SHOOTING));
         startSorterMove(target);
     }
 
@@ -417,6 +451,8 @@ public class Sorter {
      */
     private void autoIntakeColorCheck() {
         String detected = detectIntakeColor();
+
+        updateCurrentSorterALED(detected);
 
         // No ball detected - reset timer
         if (detected.equals("NONE")) {
@@ -575,8 +611,59 @@ public class Sorter {
 
     public void startShootingSequence() {
         autoShootTimer.reset(); // on state switch
-        autoShootState = 0;
+        autoShootState = -1;
         sorterState = sorterStateFSM.SHOOTING;
+        autoAlignChamberColors();
+    }
+
+    public void autoAlignChamberColors() {
+        // Find which chamber (A, B, or C) has the green ball
+        int greenIndex = indexOfColor(chamberColors, "GREEN", true);
+
+        // Figure out how much extra to turn chamber, based on motif
+        int rotationCompensateForMotif = 0;
+        if (currentMotif.equals(MOTIF.GPP)) {
+            rotationCompensateForMotif = -1;
+        }
+        if (currentMotif.equals(MOTIF.PGP)) {
+            rotationCompensateForMotif = 1;
+        }
+        if (currentMotif.equals(MOTIF.PPG)) {
+            rotationCompensateForMotif = 0;
+        }
+
+        if (greenIndex != -1) {  // Found a green ball (or next best if no green)
+            // Calculate how many rotations needed to bring that chamber to position A
+            int rotationsNeeded = 0 + rotationCompensateForMotif;
+
+            if (greenIndex == 0) {
+                // Green is already in A, no rotation needed
+                rotationsNeeded = 0 + rotationCompensateForMotif;
+            } else if (greenIndex == 1) {
+                // Green is in B, need to rotate CCW once to make B→A
+                rotationsNeeded = -1 + rotationCompensateForMotif;  // Negative = counter-clockwise
+            } else if (greenIndex == 2) {
+                // Green is in C, need to rotate CW once to make C→A
+                // OR rotate CCW twice (but CW is shorter)
+                rotationsNeeded = -2 + rotationCompensateForMotif;  // Positive = clockwise
+            }
+
+            // Apply the rotations to the array
+            for (int i = 0; i < Math.abs(rotationsNeeded); i++) {
+                if (rotationsNeeded > 0) {
+                    rotateChamberColorsClockwise(); // rotates chamberColors[] clockwise
+                    currentChamber = nextChamber(currentChamber); // CW rotation = prev chamber
+                } else if (rotationsNeeded < 0) {
+                    rotateChamberColorsCounterClockwise(); // rotates chamberColors[] counterclockwise
+                    currentChamber = prevChamber(currentChamber); // CCW rotation = next chamber
+                }
+            }
+
+            // Calculate the new target position in shooting mode
+            int targetPos = getChamberPosition(currentChamber, sorterState.equals(sorterStateFSM.SHOOTING));
+            startSorterMove(targetPos);
+        }
+        autoShootState = 0;
     }
 
     public void postTelemetry(Telemetry telemetry) {

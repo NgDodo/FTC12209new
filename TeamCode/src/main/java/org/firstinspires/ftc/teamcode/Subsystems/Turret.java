@@ -55,7 +55,6 @@ public class Turret {
 
     // === Shooting parameters ===
     private static final double IDLE_RPM = 2000;
-    private static final double SPINUP_TIME = 0.75;
 
     // === Shooter presets ===
     private final int[] rpmPresets = {3900, 4950};
@@ -74,8 +73,10 @@ public class Turret {
 
     private Pose GoalLocation;
 
-    public Turret (HardwareMap hardwareMap, String allianceColor) {;
-        switch (allianceColor) {
+    public String allianceColor;
+
+    public Turret (HardwareMap hardwareMap, String _allianceColor) {;
+        switch (_allianceColor) {
             case "RED":
                 GoalLocation = FIELD_CONSTANTS.RED_GOAL_POST;
                 break;
@@ -86,10 +87,12 @@ public class Turret {
                 GoalLocation = FIELD_CONSTANTS.BLUE_GOAL_POST;
                 break;
         }
+        this.allianceColor = _allianceColor;
 
         limelight = hardwareMap.get(Limelight3A.class, LIMELIGHT_NAME);
         limelight.setPollRateHz(100);
         limelight.pipelineSwitch(APRILTAG_PIPELINE);
+        limelight.start();
 
         imu = hardwareMap.get(IMU.class, "imu");
         IMU.Parameters imuParams = new IMU.Parameters(
@@ -166,16 +169,19 @@ public class Turret {
     private void updateTurretRotation(Follower follower) {
         /// TODO: make turret PID controlled
 
-        limelightTracking = false;
+        this.limelightTracking = false;
 
         // Try Limelight tracking first (if AprilTag visible)
         LLResult result = limelight.getLatestResult();
         if (result != null && result.isValid()) {
+
             List<LLResultTypes.FiducialResult> fiducials = result.getFiducialResults();
 
             for (LLResultTypes.FiducialResult fiducial : fiducials) {
-                if (fiducial.getFiducialId() == 24) {
-                    limelightTracking = true;
+
+                if (fiducial.getFiducialId() == 24 && this.allianceColor.equals("RED")
+                        || (fiducial.getFiducialId() == 20 && this.allianceColor.equals("BLUE"))) {
+                    this.limelightTracking = true;
                     double bearing = fiducial.getTargetXDegrees();
                     double turretRotatePower = 0.067 * bearing / 20.0;
 
@@ -190,7 +196,7 @@ public class Turret {
         }
 
         // If Limelight not tracking, use odometry-based tracking
-        if (!limelightTracking) {
+        if (!this.limelightTracking) {
             // 1. Calculate component distances from goal
             double y_goal_distance = follower.getPose().getY() - GoalLocation.getY();
             double x_goal_distance = follower.getPose().getX() - GoalLocation.getX();

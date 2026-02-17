@@ -37,9 +37,9 @@ public class FSMControlledCloseRed extends OpMode {
         follower = Constants.createFollower(hardwareMap);
         follower.setStartingPose(new Pose(123.1, 123.1, Math.toRadians(36)));
 
-        // intake = new Intake(hardwareMap);
-        // sorter = new Sorter(hardwareMap);
-        // turret = new Turret(hardwareMap, "RED");
+        intake = new Intake(hardwareMap);
+        sorter = new Sorter(hardwareMap);
+        turret = new Turret(hardwareMap, "RED");
 
         autoTimer = new ElapsedTime();
         pathTimer = new ElapsedTime();
@@ -56,7 +56,7 @@ public class FSMControlledCloseRed extends OpMode {
 
         follower.followPath(Path1);
 
-        turret.setFlywheelRPM("NEAR"); // rev up flywheel
+        // turret.setFlywheelRPM("NEAR"); // rev up flywheel
 
         sorter.chamberColors[0] = "GREEN";
         sorter.chamberColors[1] = "PURPLE";
@@ -70,13 +70,14 @@ public class FSMControlledCloseRed extends OpMode {
     public void loop() {
         follower.update();
         /// Update Subsystem Classes here
-        // intake.update();
-        // sorter.update();
-        // turret.updateTurret(follower);
+        intake.updateIntake();
+        sorter.updateSorter(gamepad1);
+        turret.updateTurret(follower);
+        // pathState = autonomousPathUpdateOnlyPathMovements();
         pathState = autonomousPathUpdateOnlyPathMovements();
 
         if (telemetryLimiter.seconds() > 0.5) {
-            // === Update Loop Time Tracking ===
+            // === Update Loop Time Tracking
             telemetry.addData("Loop Time (Hz)", 1.0 / loopTime.seconds());
             telemetry.addData("Position", follower.getPose());
 
@@ -327,9 +328,9 @@ public class FSMControlledCloseRed extends OpMode {
                         new BezierLine(
                                 new Pose(84.000, 84.000),
 
-                                new Pose(132.313, 60.711)
+                                new Pose(126.555, 61.005)
                         )
-                ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(32))
+                ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(34.95))
 
                 .build();
 
