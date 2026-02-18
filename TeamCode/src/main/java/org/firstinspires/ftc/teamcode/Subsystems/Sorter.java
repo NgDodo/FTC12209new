@@ -77,10 +77,10 @@ public class Sorter {
     private ElapsedTime autoShootTimer = new ElapsedTime();
 
     // Auto shoot timing constants (from autonomous)
-    private static final double SHOOT_DURATION = 0.45;
-    private static final double SERVO_RETRACT_DELAY = 0.2;
+    private static final double SHOOT_DURATION = 0.45; // 0.25
+    private static final double SERVO_RETRACT_DELAY = 0.2; // 0.1
     private static final double SORTER_WAIT_TIME = 0.15;
-    private static final double MODE_TOGGLE_WAIT_TIME = 0.75;
+    private static final double MODE_TOGGLE_WAIT_TIME = 0.1;
     private int shotsComplete = 0;
 
     // Feedback LEDs
@@ -116,6 +116,24 @@ public class Sorter {
         this.currentSorterAColor_LED = hardwareMap.get(Servo.class, "led2");
     }
 
+    public void updateSorter() {
+        // If not shooting, check auto intake color
+        if (sorterState.equals(sorterStateFSM.INTAKE_STATIC)) {
+            autoIntakeColorCheck();
+        }
+
+        ///// ===== If moving: ===== /////
+
+        updateSorterPIDMove();
+
+        if (sorterState.equals(sorterStateFSM.SHOOTING)) {
+            updateAutoShootSequenceAuton();
+        }
+
+        ///// ===== Update LED Feedback ====== /////
+        updateChambersFullLED();
+    }
+
     public void updateSorter(Gamepad gamepad1) {
         boolean dpadRightPressed = gamepad1.dpad_right;
         boolean yPressed = gamepad1.y;
@@ -145,7 +163,7 @@ public class Sorter {
         }
 
         if (sorterState.equals(sorterStateFSM.SHOOTING)) {
-            updateAutoShootSequence(gamepad1);
+            updateAutoShootSequenceTeleOp(gamepad1);
         }
 
         ///// ===== Update Internal MOTIF  ====== /////
@@ -198,7 +216,7 @@ public class Sorter {
      * Auto shoot sequence - shoots all 3 balls automatically
      * Based on autonomous shooting sequence
      */
-    private void updateAutoShootSequence(Gamepad gamepad1) {
+    private void updateAutoShootSequenceTeleOp(Gamepad gamepad1) {
         switch (autoShootState) {
             case -1:
                 break; // still auto aligning colors for motif
@@ -293,7 +311,111 @@ public class Sorter {
             case 10: // Wait for mode toggle, then finish
                 if (autoShootTimer.seconds() >= MODE_TOGGLE_WAIT_TIME) {
                     autoShootState = 0;
+
                     gamepad1.rumble(500); // Signal completion
+
+                    sorterState = sorterStateFSM.INTAKE_STATIC;
+
+                    rotateSorterDuringShoot();
+                    rotateChamberColorsClockwise();
+                }
+        }
+    }
+    private void updateAutoShootSequenceAuton() {
+        switch (autoShootState) {
+            case -1:
+                break; // still auto aligning colors for motif
+            case 0: // Wait for mode toggle to complete
+                if (autoShootTimer.seconds() >= MODE_TOGGLE_WAIT_TIME) {
+                    rotateSorterDuringShoot();
+                    rotateChamberColorsClockwise();
+                    autoShootTimer.reset();
+                    autoShootState++;
+                }
+                break;
+
+            case 1: // Wait for sorter rotation
+                if (autoShootTimer.seconds() >= SORTER_WAIT_TIME) {
+                    activateShooter();
+                    autoShootTimer.reset();
+                    autoShootState++;
+                }
+                break;
+
+            case 2: // Shoot ball 1
+                if (autoShootTimer.seconds() >= SHOOT_DURATION) {
+                    deactivateShooter();
+                    shotsComplete++;
+                    chamberColors[0] = "NONE";
+                    autoShootTimer.reset();
+                    autoShootState++;
+                }
+                break;
+
+            case 3: // Wait for servo retract
+                if (autoShootTimer.seconds() >= SERVO_RETRACT_DELAY) {
+                    rotateSorterDuringShoot();
+                    rotateChamberColorsClockwise();
+                    autoShootTimer.reset();
+                    autoShootState++;
+                }
+                break;
+
+            case 4: // Wait for sorter rotation
+                if (autoShootTimer.seconds() >= SORTER_WAIT_TIME) {
+                    activateShooter();
+                    autoShootTimer.reset();
+                    autoShootState++;
+                }
+                break;
+
+            case 5: // Shoot ball 2
+                if (autoShootTimer.seconds() >= SHOOT_DURATION) {
+                    deactivateShooter();
+                    shotsComplete++;
+                    chamberColors[0] = "NONE";
+                    autoShootTimer.reset();
+                    autoShootState++;
+                }
+                break;
+
+            case 6: // Wait for servo retract
+                if (autoShootTimer.seconds() >= SERVO_RETRACT_DELAY) {
+                    rotateSorterDuringShoot();
+                    rotateChamberColorsClockwise();
+                    autoShootTimer.reset();
+                    autoShootState++;
+                }
+                break;
+
+            case 7: // Wait for sorter rotation
+                if (autoShootTimer.seconds() >= SORTER_WAIT_TIME) {
+                    activateShooter();
+                    autoShootTimer.reset();
+                    autoShootState++;
+                }
+                break;
+
+            case 8: // Shoot ball 3
+                if (autoShootTimer.seconds() >= SHOOT_DURATION) {
+                    deactivateShooter();
+                    shotsComplete++;
+                    chamberColors[0] = "NONE";
+                    autoShootTimer.reset();
+                    autoShootState++;
+                }
+                break;
+
+            case 9: // Wait for servo retract, then back to intake mode
+                if (autoShootTimer.seconds() >= SERVO_RETRACT_DELAY) {
+                    autoShootTimer.reset();
+                    autoShootState++;
+                }
+                break;
+
+            case 10: // Wait for mode toggle, then finish
+                if (autoShootTimer.seconds() >= MODE_TOGGLE_WAIT_TIME) {
+                    autoShootState = 0;
 
                     sorterState = sorterStateFSM.INTAKE_STATIC;
 

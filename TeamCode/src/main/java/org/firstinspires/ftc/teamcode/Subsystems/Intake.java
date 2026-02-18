@@ -25,7 +25,7 @@ public class Intake {
         this.intakeMotor.setZeroPowerBehavior(DcMotorEx.ZeroPowerBehavior.BRAKE);
         this.intakeMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         this.intakeMotor.setDirection(DcMotorSimple.Direction.REVERSE);
-        this.intakePower = 0;
+        this.intakePower = 1.0;
 
     }
     public void updateIntake() {

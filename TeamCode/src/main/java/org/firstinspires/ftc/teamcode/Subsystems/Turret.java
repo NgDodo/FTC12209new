@@ -31,6 +31,16 @@ public class Turret {
     private double flywheelLastError = 0;
     private long flywheelLastTime = 0;
 
+    // === Flywheel PID ===
+    public static double turretRotKp = 0.0;
+    public static double turretRotKi = 0.0;
+    public static double turretRotKd = 0.0;
+    public static double turretRotKf = 0.0;
+    private double turretRotIntegral = 0;
+    private double turretRotLastErrr = 0;
+    private long turretRotLastTime = 0;
+
+
     private DcMotorEx turretRotationMotor;
     private DcMotorEx flywheelMotor;
 
@@ -46,6 +56,9 @@ public class Turret {
     public static final double TURRET_TICKS_PER_REV = 1393.1;
 
     public boolean limelightTracking = false;
+
+    public static double turretMotorPowerMultiplier = 0.25;
+    public static double turretMotorLIMELIGHTPowerMultiplier = 0.067;
 
     // === Tracking Mode ===
     private enum TrackingMode {
@@ -165,7 +178,6 @@ public class Turret {
         flywheelLastError = error;
         flywheelLastTime = currentTime;
     }
-
     private void updateTurretRotation(Follower follower) {
         /// TODO: make turret PID controlled
 
@@ -183,7 +195,7 @@ public class Turret {
                         || (fiducial.getFiducialId() == 20 && this.allianceColor.equals("BLUE"))) {
                     this.limelightTracking = true;
                     double bearing = fiducial.getTargetXDegrees();
-                    double turretRotatePower = 0.067 * bearing / 20.0;
+                    double turretRotatePower = turretMotorLIMELIGHTPowerMultiplier * bearing / 20.0;
 
                     if (Math.abs(bearing) > 2) {
                         turretRotationMotor.setPower(turretRotatePower);
@@ -220,8 +232,8 @@ public class Turret {
         double desiredRotations = turretDesiredDegrees / 360.0;
         double error = desiredRotations - turretRotations;
 
-        if (Math.abs(error) > 0.015) { // 0.015 rotations tolerance
-            turretRotationMotor.setPower(error / Math.abs(error) * 0.2);
+        if (Math.abs(error) > 0.01) { // 0.015 rotations tolerance
+            turretRotationMotor.setPower(error / Math.abs(error) * turretMotorPowerMultiplier);
         } else {
             turretRotationMotor.setPower(0);
         }
