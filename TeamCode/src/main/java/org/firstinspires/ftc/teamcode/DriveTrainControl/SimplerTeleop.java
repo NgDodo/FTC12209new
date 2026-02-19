@@ -166,7 +166,7 @@ public class SimplerTeleop extends OpMode {
     private double flywheelLastError = 0;
     private long flywheelLastTime = 0;
 
-    // === MOTIF LOGIC ===
+    // === TurretMOTIF LOGIC ===
     private enum Motif {
         GPP,
         PGP,

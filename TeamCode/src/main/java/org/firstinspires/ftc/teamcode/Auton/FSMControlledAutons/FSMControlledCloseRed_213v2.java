@@ -1,6 +1,5 @@
 package org.firstinspires.ftc.teamcode.Auton.FSMControlledAutons;
 
-import com.acmerobotics.dashboard.config.Config;
 import com.bylazar.configurables.annotations.Configurable;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.geometry.BezierCurve;
@@ -17,8 +16,8 @@ import org.firstinspires.ftc.teamcode.Subsystems.Turret;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 @Configurable
-@Autonomous(name = "FSMControlledCloseRed---P2C1", group = "!Autonomous")
-public class FSMControlledCloseRed_P2C1 extends OpMode {
+@Autonomous(name = "FSMControlledCloseRed---213v2", group = "!Autonomous")
+public class FSMControlledCloseRed_213v2 extends OpMode {
     public static boolean runSubsystemsAlso = true;
 
     public Follower follower;
@@ -34,6 +33,7 @@ public class FSMControlledCloseRed_P2C1 extends OpMode {
 
     private ElapsedTime telemetryLimiter = new ElapsedTime();
     private ElapsedTime loopTime = new ElapsedTime();
+    private ElapsedTime globalAutonTime = new ElapsedTime();
 
     private boolean lastFollowerBusyState = false;
 
@@ -62,13 +62,14 @@ public class FSMControlledCloseRed_P2C1 extends OpMode {
         follower.followPath(Path1);
 
         turret.setFlywheelRPM("NEAR"); // rev up flywheel
-
+        turret.currentTrackingMode = Turret.TurretTrackingMode.OBELISK_TRACKING;
         sorter.chamberColors[0] = "GREEN";
         sorter.chamberColors[1] = "PURPLE";
         sorter.chamberColors[2] = "PURPLE";
 
         telemetryLimiter.reset();
         loopTime.reset();
+        globalAutonTime.reset();
     }
 
     @Override
@@ -79,17 +80,39 @@ public class FSMControlledCloseRed_P2C1 extends OpMode {
         sorter.updateSorter();
         turret.updateTurret(follower);
 
+        /// Update Global Motif for Sorter
+        if (!turret.currentMotif.equals(Turret.TurretMOTIF.UNKNOWN)) {
+            switch (turret.currentMotif) {
+                case PPG:
+                    sorter.currentMotif = Sorter.MOTIF.PPG;
+                    break;
+                case PGP:
+                    sorter.currentMotif = Sorter.MOTIF.PGP;
+                    break;
+                case GPP:
+                    sorter.currentMotif = Sorter.MOTIF.GPP;
+                    break;
+            }
+        }
+
         if (runSubsystemsAlso) {
             pathState = autonomousPathUpdateFull();
         }
         else {
-            pathState = autonomousPathUpdateOnlyPathMovements();
+            if (globalAutonTime.seconds() <= 29.5) {
+                pathState = autonomousPathUpdateOnlyPathMovements();
+            }
+            if (globalAutonTime.seconds() > 29.5 && pathState != -101) {
+                sorter.resetSorterAtEndOfAuton(pathState);
+                pathState = -101; /// signals everything is shutting down
+            }
         }
 
         if (telemetryLimiter.seconds() > 0.5) {
             // === Update Loop Time Tracking
             telemetry.addData("Loop Time (Hz)", 1.0 / loopTime.seconds());
             telemetry.addData("Position", follower.getPose());
+            telemetry.addData("PATH STATE", pathState);
             telemetry.update();
             telemetryLimiter.reset();
         }
@@ -158,7 +181,9 @@ public class FSMControlledCloseRed_P2C1 extends OpMode {
         boolean followerBusy = follower.isBusy();
         switch (pathState) {
             case 0: // Move to shooting position
-                if (!followerBusy && pathTimer.seconds() > 3.0) {
+                if (follower.getPathCompletion() > 0.9
+                        && turret.flywheelReachedDesiredRPM()
+                        && (!turret.currentMotif.equals(Turret.TurretMOTIF.UNKNOWN) || pathTimer.seconds() > 2.0)) {
                     sorter.startShootingSequence(); // start shooting
                     pathState = 101; // goes to shooting sequence
                     pathTimer.reset();
@@ -169,105 +194,98 @@ public class FSMControlledCloseRed_P2C1 extends OpMode {
 
             case 101: // while shooting set 1, wait until finished shooting
                 if (!sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING)) {
-                    follower.followPath(Path2);
+                    follower.followPath(Path2); // go intake over row 2
                     intake.intakeState = Intake.intakeStateFSM.INTAKE_IN; // turn on intake
-                    pathState = 102; // has finished shooting, line up to artifact row 2
-                    pathTimer.reset();
-                }
-                break;
-            case 102: // line up to artifact row 2, wait
-                if (!followerBusy && pathTimer.seconds() > 3.0) { // wait until lined up to row 2
-                    follower.setMaxPower(0.4);
-                    follower.followPath(Path3);
-                    pathState = 200; // Continue to Path 2
+                    pathState = 200; // has finished shooting, line up to artifact row 2
                     pathTimer.reset();
                 }
                 break;
             case 200: // intake over row 2, exit when (path finished + pathtimer exceeds max allowed time)
                         // OR (if all chamber colors are filled with a color)
-                if (lastFollowerBusyState && !followerBusy) { // just finished path
+                if (lastFollowerBusyState && !followerBusy) { // just finished path, reset timer to wait for artifacts
                     pathTimer.reset();
                 }
-                if (!followerBusy && pathTimer.seconds() > 3.0) { // delay of 3 seconds, if balls are not intaken by then
-                    follower.setMaxPower(1.0);
-                    follower.followPath(Path4); // give up, go to shooting spot
-                    intake.intakeState = Intake.intakeStateFSM.INTAKE_STOP;
-                    pathState = 201;
-                    pathTimer.reset();
+                if (follower.getPathCompletion() > 0.35 && follower.getPathCompletion() < 0.7) {
+                    follower.setMaxPower(0.39);
                 }
-                if (sorter.allChambersFull()) { // successfully intaked all 3 balls
+                if (sorter.allChambersFull() || (!followerBusy && pathTimer.seconds() > 1.0)) { // successfully intaked all 3 balls
                     follower.setMaxPower(1.0);
-                    follower.followPath(Path4);
+                    follower.followPath(Path3); // go to shoot classifier
                     intake.intakeState = Intake.intakeStateFSM.INTAKE_STOP;
                     pathState = 201;
                     pathTimer.reset();
                 }
                 break;
 
-            /// INTAKE + SHOOT ROW 2 ARTIFACTS (2)
+            case 201:
+                if (!followerBusy || pathTimer.seconds() > 1.0) { // go open classifier
+                    follower.followPath(Path4);
+                    pathState = 202;
+                    pathTimer.reset();
+                }
+            /// INTAKE + SHOOT ROW 1 ARTIFACTS (2)
 
-            case 201: // moving back to shooting spot
+            case 202: // moving back to shooting spot
                 if (!followerBusy) { // once we reach shooting spot
                     // initiate shooting set #2
                     sorter.startShootingSequence(); // start shooting
-                    pathState = 202; // go to shooting set 2
+                    pathState = 203;
                     pathTimer.reset();
                 }
                 break;
-            case 202:
+            case 203:
                 if (!sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING)) {
-                    follower.setMaxPower(0.5);
-                    follower.followPath(Path5);
-                    pathState = 300; // has finished shooting, go to intake from classifier
-                    pathTimer.reset();
-                }
-                break;
-            case 300:
-                if (!followerBusy) {
-                    pathState = 301; // has reached the classifier + has opened it, should intake balls now
+                    // go intake from row 1
                     intake.intakeState = Intake.intakeStateFSM.INTAKE_IN; // turn on intake
+                    follower.followPath(Path5);
+                    pathState = 300; // go to intaking row 1
                     pathTimer.reset();
                 }
                 break;
-            /// INTAKE + SHOOT CLASSIFIER ARTIFACTS (3)
-            case 301:
-                if (pathTimer.seconds() > 6.7) { // don't wait more than 6.7 seconds to intake
-                    follower.setMaxPower(1.0);
-                    follower.followPath(Path6);
-                    pathState = 302;
-                    intake.intakeState = Intake.intakeStateFSM.INTAKE_STOP;
+            case 300: // intake over row 1, exit when (path finished + pathtimer exceeds max allowed time)
+                // OR (if all chamber colors are filled with a color)
+                if (lastFollowerBusyState && !followerBusy) { // just finished path, reset timer to wait for artifacts
                     pathTimer.reset();
                 }
-                if (sorter.allChambersFull()) { // successfully intaked all 3 balls
-                    follower.followPath(Path6);
-                    pathState = 302;
+                if (follower.getPathCompletion() > 0.1) {
+                    follower.setMaxPower(0.39);
+                }
+                if (sorter.allChambersFull() || (!followerBusy && pathTimer.seconds() > 1.0)) { // successfully intaked all 3 balls
+                    follower.setMaxPower(1.0);
+                    follower.followPath(Path6); // go to shooting spot
                     intake.intakeState = Intake.intakeStateFSM.INTAKE_STOP;
+                    pathState = 301;
+                    pathTimer.reset();
+                }
+                break;
+            case 301:
+                if (!followerBusy) { // once we reach shooting spot
+                    // initiate shooting set #2
+                    sorter.startShootingSequence(); // start shooting
+                    pathState = 302;
                     pathTimer.reset();
                 }
                 break;
             case 302:
-                if (!followerBusy) { // after reaching shooting spot, shoot
-                    // initiate shooting set #3
-                    sorter.startShootingSequence(); // start shooting set 3
-                    pathState = 303;
-                    pathTimer.reset();
-                }
-                break;
-            case 303:
                 if (!sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING)) {
-                    follower.setMaxPower(0.4);
+                    // go intake from row 3
+                    intake.intakeState = Intake.intakeStateFSM.INTAKE_IN; // turn on intake
+                    /// TODO: change to set max power after certain time period
                     follower.followPath(Path7);
-                    pathState = 400; // has finished shooting, go intake over artifact row 1
+                    pathState = 400; // go to intaking row 3
                     pathTimer.reset();
                 }
                 break;
-                /// INTAKE + SHOOT ROW 1 ARTIFACTS (4)
+            /// INTAKE + SHOOT ROW 1 ARTIFACTS (3)
             case 400:
+                if (follower.getPathCompletion() > 0.5) {
+                    follower.setMaxPower(0.39);
+                }
                 if (!followerBusy) {
                     if (lastFollowerBusyState && !follower.isBusy()) { // just finished path
                         pathTimer.reset();
                     }
-                    if (!followerBusy && pathTimer.seconds() > 3.0) { // delay of 3 seconds, if balls are not intaken by then
+                    if (!followerBusy && pathTimer.seconds() > 1.0) { // delay of 3 seconds, if balls are not intaken by then
                         follower.setMaxPower(1.0);
                         follower.followPath(Path8); // give up, go to shooting spot
                         intake.intakeState = Intake.intakeStateFSM.INTAKE_STOP;
@@ -292,9 +310,8 @@ public class FSMControlledCloseRed_P2C1 extends OpMode {
                 }
                 break;
             case 402:
-                if (!sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING)) {
+                if (!followerBusy && !sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING)) {
                     pathState = -1; // has finished shooting, END AUTON
-                    turret.stopFlywheel();
                     pathTimer.reset();
                 }
                 break;
@@ -306,22 +323,23 @@ public class FSMControlledCloseRed_P2C1 extends OpMode {
         return pathState;
     }
 
+
     private void buildPaths() {
         Path1 = follower.pathBuilder().addPath(
                         new BezierLine(
-                                new Pose(123.355, 123.014),
+                                new Pose(123.100, 123.100),
 
-                                new Pose(83.810, 84.114)
+                                new Pose(100.000, 100.000)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(36), Math.toRadians(0))
 
                 .build();
 
         Path2 = follower.pathBuilder().addPath(
-                        new BezierLine(
-                                new Pose(83.810, 84.114),
-
-                                new Pose(97.000, 60.000)
+                        new BezierCurve(
+                                new Pose(84.000, 84.000),
+                                new Pose(76.130, 54.976),
+                                new Pose(124.000, 59.500)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
 
@@ -329,66 +347,63 @@ public class FSMControlledCloseRed_P2C1 extends OpMode {
 
         Path3 = follower.pathBuilder().addPath(
                         new BezierCurve(
-                                new Pose(97.000, 60.000),
-                                new Pose(121.066, 60.400),
-                                new Pose(124.000, 60.000)
+                                new Pose(123.000, 59.500),
+                                new Pose(112, 65.5),
+                                new Pose(123.000, 69.000)
                         )
-                ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
-                .setVelocityConstraint(0.5)
-                .setBrakingStart(0.7)
+                ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(5))
+
                 .build();
 
         Path4 = follower.pathBuilder().addPath(
                         new BezierCurve(
-                                new Pose(124.000, 60.000),
-                                new Pose(91.530, 60.687),
-                                new Pose(84.000, 84.000)
+                                new Pose(127.000, 67.500),
+                                new Pose(97.104, 60.133),
+                                new Pose(90.000, 84.000)
                         )
-                ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
+                ).setLinearHeadingInterpolation(Math.toRadians(5), Math.toRadians(0))
 
                 .build();
 
         Path5 = follower.pathBuilder().addPath(
                         new BezierLine(
-                                new Pose(84.000, 84.000),
+                                new Pose(90.000, 84.000),
 
-                                new Pose(126.555, 61.005)
+                                new Pose(123.000, 84.000)
                         )
-                ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(34.95))
-                .setVelocityConstraint(0.5)
-                .setBrakingStart(0.70)
+                ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
+
                 .build();
 
         Path6 = follower.pathBuilder().addPath(
                         new BezierLine(
-                                new Pose(132.313, 60.711),
+                                new Pose(123.000, 84.000),
 
-                                new Pose(84.000, 84.000)
+                                new Pose(90.000, 84.000)
                         )
-                ).setLinearHeadingInterpolation(Math.toRadians(15), Math.toRadians(0))
+                ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
 
                 .build();
 
         Path7 = follower.pathBuilder().addPath(
-                        new BezierLine(
-                                new Pose(84.000, 84.000),
-
-                                new Pose(129.204, 83.976)
+                        new BezierCurve(
+                                new Pose(90.000, 84.000),
+                                new Pose(70.564, 34.436),
+                                new Pose(122.500, 35.100)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
-                .setVelocityConstraint(0.5)
-                .setBrakingStart(0.7)
+
                 .build();
 
         Path8 = follower.pathBuilder().addPath(
-                        new BezierLine(
-                                new Pose(129.204, 83.976),
-
-                                new Pose(84.000, 84.000)
+                        new BezierCurve(
+                                new Pose(122.500, 35.100),
+                                new Pose(84.000, 30.000),
+                                new Pose(84.000, 120.000)
                         )
-                ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
+                ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(11))
 
                 .build();
-    }
 
+    }
 }

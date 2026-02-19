@@ -61,9 +61,10 @@ public class Turret {
     public static double turretMotorLIMELIGHTPowerMultiplier = 0.067;
 
     // === Tracking Mode ===
-    private enum TrackingMode {
+    public enum TurretTrackingMode {
         OFF,
-        LIMELIGHT_AND_ODOMETRY
+        GOAL_TRACKING,
+        OBELISK_TRACKING
     }
 
     // === Shooting parameters ===
@@ -81,10 +82,19 @@ public class Turret {
     public static final double TICKS_PER_REV_FLYWHEEL = 28.0;
     private static final double RPM_TOLERANCE = 100.0;
 
-    private TrackingMode currentTrackingMode = TrackingMode.LIMELIGHT_AND_ODOMETRY;
+    public TurretTrackingMode currentTrackingMode = TurretTrackingMode.GOAL_TRACKING;
     private boolean lastBButton = false;
 
-    private Pose GoalLocation;
+    private Pose GoalLocation, ObeliskLocation;
+
+    public enum TurretMOTIF {
+        GPP,
+        PGP,
+        PPG,
+        UNKNOWN
+    }
+
+    public TurretMOTIF currentMotif;
 
     public String allianceColor;
 
@@ -100,6 +110,7 @@ public class Turret {
                 GoalLocation = FIELD_CONSTANTS.BLUE_GOAL_POST;
                 break;
         }
+        ObeliskLocation = FIELD_CONSTANTS.OBELISK_LOCATION;
         this.allianceColor = _allianceColor;
 
         limelight = hardwareMap.get(Limelight3A.class, LIMELIGHT_NAME);
@@ -127,6 +138,10 @@ public class Turret {
         turretRotationMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         turretRotationMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         turretRotationMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+
+        // === Tracking Mode ===
+        currentTrackingMode = TurretTrackingMode.GOAL_TRACKING;
+        currentMotif = TurretMOTIF.UNKNOWN;
     }
 
     public void updateTurret(Follower follower) {
@@ -179,39 +194,10 @@ public class Turret {
         flywheelLastTime = currentTime;
     }
     private void updateTurretRotation(Follower follower) {
-        /// TODO: make turret PID controlled
-
-        this.limelightTracking = false;
-
-        // Try Limelight tracking first (if AprilTag visible)
-        LLResult result = limelight.getLatestResult();
-        if (result != null && result.isValid()) {
-
-            List<LLResultTypes.FiducialResult> fiducials = result.getFiducialResults();
-
-            for (LLResultTypes.FiducialResult fiducial : fiducials) {
-
-                if (fiducial.getFiducialId() == 24 && this.allianceColor.equals("RED")
-                        || (fiducial.getFiducialId() == 20 && this.allianceColor.equals("BLUE"))) {
-                    this.limelightTracking = true;
-                    double bearing = fiducial.getTargetXDegrees();
-                    double turretRotatePower = turretMotorLIMELIGHTPowerMultiplier * bearing / 20.0;
-
-                    if (Math.abs(bearing) > 2) {
-                        turretRotationMotor.setPower(turretRotatePower);
-                    } else {
-                        turretRotationMotor.setPower(0);
-                    }
-                    break; // Found tag 20, stop searching
-                }
-            }
-        }
-
-        // If Limelight not tracking, use odometry-based tracking
-        if (!this.limelightTracking) {
+        if (currentTrackingMode.equals(TurretTrackingMode.OBELISK_TRACKING) && currentMotif.equals(TurretMOTIF.UNKNOWN)) {
             // 1. Calculate component distances from goal
-            double y_goal_distance = follower.getPose().getY() - GoalLocation.getY();
-            double x_goal_distance = follower.getPose().getX() - GoalLocation.getX();
+            double y_goal_distance = follower.getPose().getY() - ObeliskLocation.getY();
+            double x_goal_distance = follower.getPose().getX() - ObeliskLocation.getX();
 
             // 2. Calculate absolute angle to goal in field coordinates
             double angle_to_goal = Math.atan2(y_goal_distance, x_goal_distance);
@@ -221,6 +207,74 @@ public class Turret {
 
             // 4. Move turret to track the goal
             moveTurretToOffset(turretDesiredRelativeOffset);
+
+
+            // Check if motif value has been detected yet
+            LLResult result = limelight.getLatestResult();
+            if (result != null && result.isValid()) {
+                List<LLResultTypes.FiducialResult> fiducials = result.getFiducialResults();
+                for (LLResultTypes.FiducialResult fiducial : fiducials) {
+                    switch (fiducial.getFiducialId()) {
+                        case 21:
+                            currentMotif = TurretMOTIF.GPP;
+                            currentTrackingMode = TurretTrackingMode.GOAL_TRACKING;
+                            break;
+                        case 22:
+                            currentMotif = TurretMOTIF.PGP;
+                            currentTrackingMode = TurretTrackingMode.GOAL_TRACKING;
+                            break;
+                        case 23:
+                            currentMotif = TurretMOTIF.PPG;
+                            currentTrackingMode = TurretTrackingMode.GOAL_TRACKING;
+                            break;
+                    }
+                }
+            }
+        }
+
+        /// TODO: make turret PID controlled
+        this.limelightTracking = false;
+
+        if (currentTrackingMode.equals(TurretTrackingMode.GOAL_TRACKING)) {
+            // Try Limelight tracking first (if AprilTag visible)
+            LLResult result = limelight.getLatestResult();
+            if (result != null && result.isValid()) {
+
+                List<LLResultTypes.FiducialResult> fiducials = result.getFiducialResults();
+
+                for (LLResultTypes.FiducialResult fiducial : fiducials) {
+
+                    if (fiducial.getFiducialId() == 24 && this.allianceColor.equals("RED")
+                            || (fiducial.getFiducialId() == 20 && this.allianceColor.equals("BLUE"))) {
+                        this.limelightTracking = true;
+                        double bearing = fiducial.getTargetXDegrees();
+                        double turretRotatePower = turretMotorLIMELIGHTPowerMultiplier * bearing / 20.0;
+
+                        if (Math.abs(bearing) > 2) {
+                            turretRotationMotor.setPower(turretRotatePower);
+                        } else {
+                            turretRotationMotor.setPower(0);
+                        }
+                        break; // Found tag 20, stop searching
+                    }
+                }
+            }
+
+            // If Limelight not tracking, use odometry-based tracking
+            if (!this.limelightTracking) {
+                // 1. Calculate component distances from goal
+                double y_goal_distance = follower.getPose().getY() - GoalLocation.getY();
+                double x_goal_distance = follower.getPose().getX() - GoalLocation.getX();
+
+                // 2. Calculate absolute angle to goal in field coordinates
+                double angle_to_goal = Math.atan2(y_goal_distance, x_goal_distance);
+
+                // 3. Calculate turret offset relative to robot heading
+                double turretDesiredRelativeOffset = normalizeAngle(-angle_to_goal + follower.getHeading() + Math.PI);
+
+                // 4. Move turret to track the goal
+                moveTurretToOffset(turretDesiredRelativeOffset);
+            }
         }
     }
     /**
@@ -269,6 +323,13 @@ public class Turret {
         else {
             targetRPM = rpmPresets[0];
         }
+    }
+
+    public boolean flywheelReachedDesiredRPM() { /// is flywheel rpm within desired range (+/- 200 rpm)
+        if ((Math.abs(targetRPM - ((flywheelMotor.getVelocity() / TICKS_PER_REV_FLYWHEEL) * 60.0))) < 200) {
+            return true;
+        }
+        return false;
     }
     public void stopFlywheel() {
         targetRPM = 0;

@@ -136,7 +136,7 @@ public class subsystemTeleopRed extends OpMode {
             telemetry.addData("Target RPM", turret.targetRPM);
             telemetry.addData("Actual RPM", String.format("%.0f", currentRPM));
             telemetry.addData("Limelight Tracking? ", turret.limelightTracking);
-            telemetry.addData("MOTIF", sorter.currentMotif);
+            telemetry.addData("TurretMOTIF", sorter.currentMotif);
 
             telemetry.update();
             telemetryLimiter.reset();

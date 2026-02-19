@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode.Subsystems;
 
+import com.bylazar.configurables.annotations.Configurable;
 import com.qualcomm.hardware.rev.RevColorSensorV3;
 import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
@@ -12,6 +13,7 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.robotcore.external.Telemetry;
 
+@Configurable
 public class Sorter {
     public enum sorterStateFSM {
         INTAKE_STATIC, // in intake mode, not moving
@@ -29,7 +31,7 @@ public class Sorter {
 
     public sorterStateFSM sorterState;
     public String[] chamberColors = {"NONE", "NONE", "NONE"};
-    private enum MOTIF {
+    public enum MOTIF {
         GPP,
         PGP,
         PPG
@@ -77,10 +79,10 @@ public class Sorter {
     private ElapsedTime autoShootTimer = new ElapsedTime();
 
     // Auto shoot timing constants (from autonomous)
-    private static final double SHOOT_DURATION = 0.45; // 0.25
-    private static final double SERVO_RETRACT_DELAY = 0.2; // 0.1
-    private static final double SORTER_WAIT_TIME = 0.15;
-    private static final double MODE_TOGGLE_WAIT_TIME = 0.1;
+    public static double SHOOT_DURATION = 0.25; // 0.25
+    public static double SERVO_RETRACT_DELAY = 0.2; // 0.1
+    public static double SORTER_WAIT_TIME = 0.15;
+    public static double MODE_TOGGLE_WAIT_TIME = 0.0;
     private int shotsComplete = 0;
 
     // Feedback LEDs
@@ -166,7 +168,7 @@ public class Sorter {
             updateAutoShootSequenceTeleOp(gamepad1);
         }
 
-        ///// ===== Update Internal MOTIF  ====== /////
+        ///// ===== Update Internal TurretMOTIF  ====== /////
         if (yPressed && !lastY) {
             switch (currentMotif) {
                 case GPP:
@@ -786,6 +788,16 @@ public class Sorter {
             startSorterMove(targetPos);
         }
         autoShootState = 0;
+    }
+
+    public void resetSorterAtEndOfAuton(int trigger) {
+        if (trigger != -101) {
+            sorterState = sorterStateFSM.INTAKE_STATIC;
+            int targetPos = getChamberPosition(currentChamber, false);
+            startSorterMove(targetPos);
+
+            deactivateShooter();
+        }
     }
 
     public void postTelemetry(Telemetry telemetry) {

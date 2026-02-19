@@ -1,6 +1,7 @@
 package org.firstinspires.ftc.teamcode.Auton.FSMControlledAutons;
 
 import com.acmerobotics.dashboard.config.Config;
+import com.bylazar.configurables.annotations.Configurable;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.geometry.BezierCurve;
 import com.pedropathing.geometry.BezierLine;
@@ -15,7 +16,7 @@ import org.firstinspires.ftc.teamcode.Subsystems.Sorter;
 import org.firstinspires.ftc.teamcode.Subsystems.Turret;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Config
+@Configurable
 @Autonomous(name = "FSMControlledCloseRed---213", group = "!Autonomous")
 public class FSMControlledCloseRed_213 extends OpMode {
     public static boolean runSubsystemsAlso = true;
@@ -158,7 +159,7 @@ public class FSMControlledCloseRed_213 extends OpMode {
         boolean followerBusy = follower.isBusy();
         switch (pathState) {
             case 0: // Move to shooting position
-                if (follower.getPathCompletion() > 0.9) {
+                if (follower.getPathCompletion() > 0.9 && turret.flywheelReachedDesiredRPM()) {
                     sorter.startShootingSequence(); // start shooting
                     pathState = 101; // goes to shooting sequence
                     pathTimer.reset();
@@ -201,7 +202,7 @@ public class FSMControlledCloseRed_213 extends OpMode {
             /// INTAKE + SHOOT ROW 1 ARTIFACTS (2)
 
             case 202: // moving back to shooting spot
-                if (!followerBusy) { // once we reach shooting spot
+                if (!followerBusy && turret.flywheelReachedDesiredRPM()) { // once we reach shooting spot
                     // initiate shooting set #2
                     sorter.startShootingSequence(); // start shooting
                     pathState = 203;
@@ -232,7 +233,7 @@ public class FSMControlledCloseRed_213 extends OpMode {
                 }
                 break;
             case 301:
-                if (!followerBusy) { // once we reach shooting spot
+                if (!followerBusy && turret.flywheelReachedDesiredRPM()) { // once we reach shooting spot
                     // initiate shooting set #2
                     sorter.startShootingSequence(); // start shooting
                     pathState = 302;
@@ -252,7 +253,7 @@ public class FSMControlledCloseRed_213 extends OpMode {
             /// INTAKE + SHOOT ROW 1 ARTIFACTS (3)
             case 400:
                 if (!followerBusy) {
-                    if (follower.getPathCompletion() > 0.3) {
+                    if (follower.getPathCompletion() > 0.2) {
                         follower.setMaxPower(0.4);
                     }
                     if (lastFollowerBusyState && !follower.isBusy()) { // just finished path
@@ -275,7 +276,7 @@ public class FSMControlledCloseRed_213 extends OpMode {
                 }
                 break;
             case 401:
-                if (!followerBusy) { // once we reach shooting spot
+                if (!followerBusy && turret.flywheelReachedDesiredRPM()) { // once we reach shooting spot
                     // initiate shooting set #4
                     sorter.startShootingSequence(); // start shooting
                     pathState = 402; // go to shooting set 4
@@ -289,7 +290,7 @@ public class FSMControlledCloseRed_213 extends OpMode {
                     pathState = 403;
                 }
             case 403:
-                if (!followerBusy) {
+                if (!followerBusy && !sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING)) { // 304515
                     pathState = -1; // has finished shooting, END AUTON
                     turret.stopFlywheel();
                     pathTimer.reset();
@@ -318,7 +319,7 @@ public class FSMControlledCloseRed_213 extends OpMode {
         Path2 = follower.pathBuilder().addPath(
                         new BezierCurve(
                                 new Pose(84.000, 84.000),
-                                new Pose(90.130, 54.976),
+                                new Pose(76.130, 54.976),
                                 new Pose(123.000, 59.500)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
@@ -358,8 +359,8 @@ public class FSMControlledCloseRed_213 extends OpMode {
         Path6 = follower.pathBuilder().addPath(
                         new BezierCurve(
                                 new Pose(84.000, 84.000),
-                                new Pose(79.564, 34.436),
-                                new Pose(123.500, 35.100)
+                                new Pose(70.564, 34.436),
+                                new Pose(122.500, 35.100)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
 
@@ -367,7 +368,7 @@ public class FSMControlledCloseRed_213 extends OpMode {
 
         Path7 = follower.pathBuilder().addPath(
                         new BezierLine(
-                                new Pose(123.500, 35.100),
+                                new Pose(122.500, 35.100),
 
                                 new Pose(84.000, 84.000)
                         )

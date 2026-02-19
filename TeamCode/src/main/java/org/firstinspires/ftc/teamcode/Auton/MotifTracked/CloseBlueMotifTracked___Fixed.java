@@ -54,7 +54,7 @@ public class CloseBlueMotifTracked___Fixed extends OpMode {
     // === Limelight Configuration ===
     private static final String LIMELIGHT_NAME = "Webcam 2";
     private static final int APRILTAG_PIPELINE = 1;
-    private String turretTrackingMode = "MOTIF"; // Toggles to goal after reading id
+    private String turretTrackingMode = "TurretMOTIF"; // Toggles to goal after reading id
 
     private Pose MOTIF_LOCATION = new Pose(72, 144, 0);
 
@@ -189,7 +189,7 @@ public class CloseBlueMotifTracked___Fixed extends OpMode {
         flywheelLastTime = System.nanoTime();
         pathState = 0;
 
-        /// TODO: Write MOTIF SETTING CODE
+        /// TODO: Write TurretMOTIF SETTING CODE
         // Default: Motif = GPP
         currentMotif = MOTIF.UNKNOWN;
 
@@ -354,7 +354,7 @@ public class CloseBlueMotifTracked___Fixed extends OpMode {
         // ====================================================================
         // TURRET TRACKING (RUNS CONTINUOUSLY)
         // ====================================================================
-        if (turretTrackingMode.equals("MOTIF") && currentMotif.equals(MOTIF.UNKNOWN)) {
+        if (turretTrackingMode.equals("TurretMOTIF") && currentMotif.equals(MOTIF.UNKNOWN)) {
             // 1. Calculate component distances from goal
             double y_goal_distance = follower.getPose().getY() - MOTIF_LOCATION.getY();
             double x_goal_distance = follower.getPose().getX() - MOTIF_LOCATION.getX();
@@ -406,7 +406,7 @@ public class CloseBlueMotifTracked___Fixed extends OpMode {
         telemetry.addData("Loop Time (Hz)", 1.0 / loopTime.seconds());
 
         telemetry.addData("Ch1/2/3", chamberColors[0] + "/" + chamberColors[1] + "/" + chamberColors[2]);
-        telemetry.addData("MOTIF: ", currentMotif);
+        telemetry.addData("TurretMOTIF: ", currentMotif);
         telemetry.addData("PATH STATE: ", pathState);
 
         telemetry.update();
