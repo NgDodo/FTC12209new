@@ -31,15 +31,31 @@ public class Turret {
     private double flywheelLastError = 0;
     private long flywheelLastTime = 0;
 
-    // === Flywheel PID ===
-    public static double turretRotKp = 0.0;
-    public static double turretRotKi = 0.0;
-    public static double turretRotKd = 0.0;
-    public static double turretRotKf = 0.0;
-    private double turretRotIntegral = 0;
-    private double turretRotLastErrr = 0;
-    private long turretRotLastTime = 0;
+    // === Turret Odometry PID ===
+    /// if it's oversshooting the turret rotation while detecting limelight, increase llKd or reduce llKp
+    /// if it's overshooting while not detecting limelight, decrease kP
+    // Used when limelight cannot see the target — rougher, longer-range correction
+    public static double odomKp = 4.75;
+    public static double odomKi = 0.0;
+    public static double odomKd = 0.18;
+    public static double odomKf = 0.0;
+    public static double odomDeadband = 0.01;       // rotations — skip PID inside this range
+    public static double odomIntegralClamp = 5.0;   // max integral accumulation
+    private double odomIntegral = 0;
+    private double odomLastError = 0;
+    private long odomLastTime = 0;
 
+    // === Turret Limelight PID ===
+    // Used when limelight sees the target — finer, short-range correction
+    public static double llKp = 3.0;
+    public static double llKi = 0.0;
+    public static double llKd = 0.15;
+    public static double llKf = 0.0;
+    public static double llDeadband = 2.0;          // degrees — skip PID inside this range
+    public static double llIntegralClamp = 5.0;     // max integral accumulation
+    private double llIntegral = 0;
+    private double llLastError = 0;
+    private long llLastTime = 0;
 
     private DcMotorEx turretRotationMotor;
     private DcMotorEx flywheelMotor;
@@ -95,10 +111,9 @@ public class Turret {
     }
 
     public TurretMOTIF currentMotif;
-
     public String allianceColor;
 
-    public Turret (HardwareMap hardwareMap, String _allianceColor) {;
+    public Turret(HardwareMap hardwareMap, String _allianceColor) {
         switch (_allianceColor) {
             case "RED":
                 GoalLocation = FIELD_CONSTANTS.RED_GOAL_POST;
@@ -129,17 +144,17 @@ public class Turret {
         imu.resetYaw();
 
         flywheelLastTime = System.nanoTime();
+        odomLastTime = System.nanoTime();
+        llLastTime = System.nanoTime();
 
         flywheelMotor = hardwareMap.get(DcMotorEx.class, "m3");
         flywheelMotor.setDirection(DcMotorSimple.Direction.REVERSE);
         turretRotationMotor = hardwareMap.get(DcMotorEx.class, "m2");
 
-        // === Turret Setup ===
         turretRotationMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         turretRotationMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         turretRotationMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
-        // === Tracking Mode ===
         currentTrackingMode = TurretTrackingMode.GOAL_TRACKING;
         currentMotif = TurretMOTIF.UNKNOWN;
     }
@@ -148,6 +163,7 @@ public class Turret {
         updateTurretRotation(follower);
         updateFlywheelSpeed(follower);
     }
+
     public void updateTurret(Follower follower, Gamepad gamepad1) {
         leftBumperPressed = gamepad1.left_bumper;
         rightBumperPressed = gamepad1.right_bumper;
@@ -155,7 +171,6 @@ public class Turret {
         if (leftBumperPressed && !lastLeftBumper) {
             targetRPM = IDLE_RPM;
         }
-
         if (rightBumperPressed && !lastRightBumper) {
             presetIndex = (presetIndex + 1) % rpmPresets.length;
             targetRPM = rpmPresets[presetIndex];
@@ -169,8 +184,6 @@ public class Turret {
     }
 
     private void updateFlywheelSpeed(Follower follower) {
-        /// TODO: make flywheel speed update based on 1) follower distance, and 2) limelight distance
-
         double currentVelocity = flywheelMotor.getVelocity();
         double currentRPM = (currentVelocity / TICKS_PER_REV_FLYWHEEL) * 60.0;
 
@@ -187,29 +200,20 @@ public class Turret {
         double pidOutput = (flywheelKp * error) + (flywheelKi * flywheelIntegral) + (flywheelKd * derivative) + feedforward;
 
         pidOutput = Math.max(-1.0, Math.min(1.0, pidOutput));
-
         flywheelMotor.setPower(pidOutput);
 
         flywheelLastError = error;
         flywheelLastTime = currentTime;
     }
+
     private void updateTurretRotation(Follower follower) {
         if (currentTrackingMode.equals(TurretTrackingMode.OBELISK_TRACKING) && currentMotif.equals(TurretMOTIF.UNKNOWN)) {
-            // 1. Calculate component distances from goal
             double y_goal_distance = follower.getPose().getY() - ObeliskLocation.getY();
             double x_goal_distance = follower.getPose().getX() - ObeliskLocation.getX();
-
-            // 2. Calculate absolute angle to goal in field coordinates
             double angle_to_goal = Math.atan2(y_goal_distance, x_goal_distance);
-
-            // 3. Calculate turret offset relative to robot heading
             double turretDesiredRelativeOffset = normalizeAngle(-angle_to_goal + follower.getHeading() + Math.PI);
+            runOdomPID(turretDesiredRelativeOffset);
 
-            // 4. Move turret to track the goal
-            moveTurretToOffset(turretDesiredRelativeOffset);
-
-
-            // Check if motif value has been detected yet
             LLResult result = limelight.getLatestResult();
             if (result != null && result.isValid()) {
                 List<LLResultTypes.FiducialResult> fiducials = result.getFiducialResults();
@@ -232,71 +236,127 @@ public class Turret {
             }
         }
 
-        /// TODO: make turret PID controlled
         this.limelightTracking = false;
 
         if (currentTrackingMode.equals(TurretTrackingMode.GOAL_TRACKING)) {
-            // Try Limelight tracking first (if AprilTag visible)
             LLResult result = limelight.getLatestResult();
             if (result != null && result.isValid()) {
-
                 List<LLResultTypes.FiducialResult> fiducials = result.getFiducialResults();
-
                 for (LLResultTypes.FiducialResult fiducial : fiducials) {
-
-                    if (fiducial.getFiducialId() == 24 && this.allianceColor.equals("RED")
+                    if ((fiducial.getFiducialId() == 24 && this.allianceColor.equals("RED"))
                             || (fiducial.getFiducialId() == 20 && this.allianceColor.equals("BLUE"))) {
                         this.limelightTracking = true;
-                        double bearing = fiducial.getTargetXDegrees();
-                        double turretRotatePower = turretMotorLIMELIGHTPowerMultiplier * bearing / 20.0;
 
-                        if (Math.abs(bearing) > 2) {
-                            turretRotationMotor.setPower(turretRotatePower);
+                        double bearingDegrees = fiducial.getTargetXDegrees();
+                        if (Math.abs(bearingDegrees) > llDeadband) {
+                            // Error in rotations — limelight bearing is a relative offset so no
+                            // position subtraction needed, just convert degrees to rotations
+                            double error = bearingDegrees / 360.0;
+                            turretRotationMotor.setPower(runLimelightPID(error));
                         } else {
+                            // Inside deadband — hold position and reset limelight PID state
+                            resetLimelightPID();
                             turretRotationMotor.setPower(0);
                         }
-                        break; // Found tag 20, stop searching
+                        break;
                     }
                 }
             }
 
-            // If Limelight not tracking, use odometry-based tracking
+            // Limelight lost the target — fall back to odometry, reset LL PID so it
+            // doesn't have stale integral/derivative when it reacquires
             if (!this.limelightTracking) {
-                // 1. Calculate component distances from goal
+                resetLimelightPID();
+
                 double y_goal_distance = follower.getPose().getY() - GoalLocation.getY();
                 double x_goal_distance = follower.getPose().getX() - GoalLocation.getX();
-
-                // 2. Calculate absolute angle to goal in field coordinates
                 double angle_to_goal = Math.atan2(y_goal_distance, x_goal_distance);
-
-                // 3. Calculate turret offset relative to robot heading
                 double turretDesiredRelativeOffset = normalizeAngle(-angle_to_goal + follower.getHeading() + Math.PI);
-
-                // 4. Move turret to track the goal
-                moveTurretToOffset(turretDesiredRelativeOffset);
+                runOdomPID(turretDesiredRelativeOffset);
             }
         }
     }
-    /**
-     * Moves turret to desired offset angle (odometry-based tracking)
-     */
-    private double moveTurretToOffset(double turretDesiredRelativeOffset) {
-        double turretDesiredDegrees = Math.toDegrees(turretDesiredRelativeOffset);
-        double turretRotations = turretRotationMotor.getCurrentPosition() / TURRET_TICKS_PER_REV;
-        double desiredRotations = turretDesiredDegrees / 360.0;
-        double error = desiredRotations - turretRotations;
 
-        if (Math.abs(error) > 0.01) { // 0.015 rotations tolerance
-            turretRotationMotor.setPower(error / Math.abs(error) * turretMotorPowerMultiplier);
-        } else {
+    /**
+     * Odometry-based PID — converts a desired relative angle offset into motor power.
+     * Error is in rotations.
+     */
+    private double runOdomPID(double turretDesiredRelativeOffset) {
+        double turretDesiredDegrees = Math.toDegrees(turretDesiredRelativeOffset);
+        double currentRotations = turretRotationMotor.getCurrentPosition() / TURRET_TICKS_PER_REV;
+        double desiredRotations = turretDesiredDegrees / 360.0;
+        double error = desiredRotations - currentRotations;
+
+        if (Math.abs(error) < odomDeadband) {
+            resetOdomPID();
             turretRotationMotor.setPower(0);
+            return error;
         }
+
+        long currentTime = System.nanoTime();
+        double dt = (currentTime - odomLastTime) / 1e9;
+        if (dt <= 0 || dt > 0.5) dt = 0.02;
+
+        odomIntegral += error * dt;
+        odomIntegral = Math.max(-odomIntegralClamp, Math.min(odomIntegralClamp, odomIntegral));
+
+        double derivative = (error - odomLastError) / dt;
+        double feedforward = odomKf * Math.signum(error);
+
+        double output = (odomKp * error)
+                + (odomKi * odomIntegral)
+                + (odomKd * derivative)
+                + feedforward;
+
+        output = Math.max(-1.0, Math.min(1.0, output));
+        turretRotationMotor.setPower(output);
+
+        odomLastError = error;
+        odomLastTime = currentTime;
+
         return error;
     }
 
     /**
-     * Normalizes an angle to the range [-PI, PI]
+     * Limelight-based PID — error is the bearing in rotations (degrees/360).
+     * Since bearing is already a relative offset from center, no position math needed.
      */
+    private double runLimelightPID(double error) {
+        long currentTime = System.nanoTime();
+        double dt = (currentTime - llLastTime) / 1e9;
+        if (dt <= 0 || dt > 0.5) dt = 0.02;
+
+        llIntegral += error * dt;
+        llIntegral = Math.max(-llIntegralClamp, Math.min(llIntegralClamp, llIntegral));
+
+        double derivative = (error - llLastError) / dt;
+        double feedforward = llKf * Math.signum(error);
+
+        double output = (llKp * error)
+                + (llKi * llIntegral)
+                + (llKd * derivative)
+                + feedforward;
+
+        output = Math.max(-1.0, Math.min(1.0, output));
+
+        llLastError = error;
+        llLastTime = currentTime;
+
+        return output;
+    }
+
+    private void resetOdomPID() {
+        odomIntegral = 0;
+        odomLastError = 0;
+        odomLastTime = System.nanoTime();
+    }
+
+    private void resetLimelightPID() {
+        llIntegral = 0;
+        llLastError = 0;
+        llLastTime = System.nanoTime();
+    }
+
     private double normalizeAngle(double angle) {
         while (angle > Math.PI) angle -= 2 * Math.PI;
         while (angle < -Math.PI) angle += 2 * Math.PI;
@@ -304,7 +364,6 @@ public class Turret {
     }
 
     public void postTelemetry(Telemetry telemetry) {
-        // Calculate flywheel status
         double currentRPM = (flywheelMotor.getVelocity() / TICKS_PER_REV_FLYWHEEL) * 60.0;
         double rpmError = Math.abs(targetRPM - currentRPM);
         boolean rpmReady = (targetRPM > 0) && (rpmError <= RPM_TOLERANCE);
@@ -312,15 +371,19 @@ public class Turret {
         telemetry.addLine("=== Shooter ===");
         telemetry.addData("Target RPM", targetRPM);
         telemetry.addData("Actual RPM", String.format("%.0f", currentRPM));
-        telemetry.addData("Ready", rpmReady ? "YES" : "NO");    // Is flywheel at speed?
+        telemetry.addData("Ready", rpmReady ? "YES" : "NO");
+        telemetry.addLine("=== Turret ===");
+        telemetry.addData("Tracking Mode", currentTrackingMode);
+        telemetry.addData("Limelight Active", limelightTracking);
+        telemetry.addData("Turret Position (ticks)", turretRotationMotor.getCurrentPosition());
+        telemetry.addData("Turret Position (rot)", turretRotationMotor.getCurrentPosition() / TURRET_TICKS_PER_REV);
         telemetry.addLine();
     }
 
     public void setFlywheelRPM(String shootingLocation) {
         if (shootingLocation.equals("FAR")) {
             targetRPM = rpmPresets[1];
-        }
-        else {
+        } else {
             targetRPM = rpmPresets[0];
         }
     }
@@ -328,21 +391,20 @@ public class Turret {
     public void setFlywheelRPM(int desiredFlywheelRPM) {
         targetRPM = desiredFlywheelRPM;
     }
-    public boolean flywheelReachedDesiredRPM() { /// is flywheel rpm within desired range (+/- 200 rpm)
-        if ((Math.abs(targetRPM - ((flywheelMotor.getVelocity() / TICKS_PER_REV_FLYWHEEL) * 60.0))) < 200) {
-            return true;
-        }
-        return false;
+
+    public boolean flywheelReachedDesiredRPM() {
+        return Math.abs(targetRPM - ((flywheelMotor.getVelocity() / TICKS_PER_REV_FLYWHEEL) * 60.0)) < 200;
     }
+
     public void stopFlywheel() {
         targetRPM = 0;
     }
 
-
-    public DcMotorEx getFlywheelMotor (){
+    public DcMotorEx getFlywheelMotor() {
         return flywheelMotor;
     }
-    public double getFlywheelRPM () {
+
+    public double getFlywheelRPM() {
         return (flywheelMotor.getVelocity() / TICKS_PER_REV_FLYWHEEL) * 60.0;
     }
 }
