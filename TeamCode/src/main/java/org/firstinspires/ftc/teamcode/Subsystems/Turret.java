@@ -71,7 +71,7 @@ public class Turret {
     private static final double IDLE_RPM = 2000;
 
     // === Shooter presets ===
-    private final int[] rpmPresets = {3900, 4950};
+    private final int[] rpmPresets = {3900, 4900};
     private int presetIndex = -1;
     public double targetRPM = 0;
     private boolean lastRightBumper = false;
@@ -85,7 +85,7 @@ public class Turret {
     public TurretTrackingMode currentTrackingMode = TurretTrackingMode.GOAL_TRACKING;
     private boolean lastBButton = false;
 
-    private Pose GoalLocation, ObeliskLocation;
+    public Pose GoalLocation, ObeliskLocation;
 
     public enum TurretMOTIF {
         GPP,
@@ -325,6 +325,9 @@ public class Turret {
         }
     }
 
+    public void setFlywheelRPM(int desiredFlywheelRPM) {
+        targetRPM = desiredFlywheelRPM;
+    }
     public boolean flywheelReachedDesiredRPM() { /// is flywheel rpm within desired range (+/- 200 rpm)
         if ((Math.abs(targetRPM - ((flywheelMotor.getVelocity() / TICKS_PER_REV_FLYWHEEL) * 60.0))) < 200) {
             return true;
@@ -335,7 +338,11 @@ public class Turret {
         targetRPM = 0;
     }
 
+
     public DcMotorEx getFlywheelMotor (){
         return flywheelMotor;
+    }
+    public double getFlywheelRPM () {
+        return (flywheelMotor.getVelocity() / TICKS_PER_REV_FLYWHEEL) * 60.0;
     }
 }

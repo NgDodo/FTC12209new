@@ -800,6 +800,13 @@ public class Sorter {
         }
     }
 
+    public void setShootingConstants(double shoot_duration, double servo_retract_delay, double sorter_wait_time, double mode_toggle_wait_time){
+        // Auto shoot timing constants (from autonomous)
+        this.SHOOT_DURATION = shoot_duration; // 0.25
+        this.SERVO_RETRACT_DELAY = servo_retract_delay; // 0.1
+        this.SORTER_WAIT_TIME = sorter_wait_time;
+        this.MODE_TOGGLE_WAIT_TIME = mode_toggle_wait_time;
+    }
     public void postTelemetry(Telemetry telemetry) {
         int rawPos = sorterEncoder.getCurrentPosition();
         int normPos = _normalize(rawPos);
