@@ -106,19 +106,10 @@ public class FSMControlledCloseRed_P123 extends OpMode {
         }
 
         if (runSubsystemsAlso) {
-            if (globalAutonTime.seconds() <= 29.3) {
+            if (globalAutonTime.seconds() <= 29.0) {
                 pathState = autonomousPathUpdateFull();
             }
-            if (globalAutonTime.seconds() > 29.3 && pathState != -101) {
-                sorter.resetSorterAtEndOfAuton(pathState);
-                pathState = -101; /// signals everything is shutting down
-            }
-        }
-        else {
-            if (globalAutonTime.seconds() <= 29.3) {
-                pathState = autonomousPathUpdateFull();
-            }
-            if (globalAutonTime.seconds() > 29.3 && pathState != -101) {
+            if (globalAutonTime.seconds() > 29.0 && pathState != -101) {
                 sorter.resetSorterAtEndOfAuton(pathState);
                 pathState = -101; /// signals everything is shutting down
             }
@@ -163,7 +154,7 @@ public class FSMControlledCloseRed_P123 extends OpMode {
                     pathTimer.reset();
                 }
                 if (follower.getPathCompletion() > 0.35 && follower.getPathCompletion() < 0.7) {
-                    follower.setMaxPower(0.39);
+                    follower.setMaxPower(0.5);
                 }
                 if (sorter.allChambersFull() || (!followerBusy && pathTimer.seconds() > 1.0)) { // successfully intaked all 3 balls
                     follower.setMaxPower(1.0);
@@ -206,7 +197,7 @@ public class FSMControlledCloseRed_P123 extends OpMode {
                     pathTimer.reset();
                 }
                 if (follower.getPathCompletion() > 0.1) {
-                    follower.setMaxPower(0.39);
+                    follower.setMaxPower(0.5);
                 }
                 if (sorter.allChambersFull() || (!followerBusy && pathTimer.seconds() > 1.0)) { // successfully intaked all 3 balls
                     follower.setMaxPower(1.0);
@@ -245,7 +236,7 @@ public class FSMControlledCloseRed_P123 extends OpMode {
             /// INTAKE + SHOOT ROW 1 ARTIFACTS (3)
             case 400:
                 if (follower.getPathCompletion() > 0.5) {
-                    follower.setMaxPower(0.39);
+                    follower.setMaxPower(0.5);
                 }
                 if (!followerBusy) {
                     if (lastFollowerBusyState && !follower.isBusy()) { // just finished path
@@ -284,7 +275,8 @@ public class FSMControlledCloseRed_P123 extends OpMode {
                 }
                 break;
             case -1:
-                //end
+            case -101:
+                // end
                 break;
         }
         lastFollowerBusyState = followerBusy;
@@ -307,7 +299,7 @@ public class FSMControlledCloseRed_P123 extends OpMode {
                 .addPath(
                         new BezierLine(
                                 new Pose(93.867, 84.000),
-                                new Pose(123.000, 84.000)
+                                new Pose(123.500, 84.000)
                         )
                 )
                 .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
@@ -340,7 +332,7 @@ public class FSMControlledCloseRed_P123 extends OpMode {
                                 new Pose(95.000, 84.000),
                                 new Pose(88.075, 56.338),
                                 new Pose(106.383, 58.577),
-                                new Pose(125.000, 59.300)
+                                new Pose(126.000, 59.300)
                         )
                 )
                 .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
@@ -372,7 +364,7 @@ public class FSMControlledCloseRed_P123 extends OpMode {
                         new BezierCurve(
                                 new Pose(94.500, 83.500),
                                 new Pose(81.217, 36.895),
-                                new Pose(124.500, 35.500)
+                                new Pose(125.500, 35.500)
                         )
                 )
                 .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))

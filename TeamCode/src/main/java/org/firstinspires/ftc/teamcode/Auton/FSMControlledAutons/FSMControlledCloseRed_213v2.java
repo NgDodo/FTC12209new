@@ -37,7 +37,7 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
 
     private boolean lastFollowerBusyState = false;
 
-    public static int desiredFlywheelRPM = 3730;
+    public static int desiredFlywheelRPM = 3720;
 
     @Override
     public void init() {

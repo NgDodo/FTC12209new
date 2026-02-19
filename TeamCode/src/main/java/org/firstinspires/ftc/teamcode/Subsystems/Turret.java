@@ -58,7 +58,7 @@ public class Turret {
     public boolean limelightTracking = false;
 
     public static double turretMotorPowerMultiplier = 0.25;
-    public static double turretMotorLIMELIGHTPowerMultiplier = 0.067;
+    public static double turretMotorLIMELIGHTPowerMultiplier = 0.077;
 
     // === Tracking Mode ===
     public enum TurretTrackingMode {
