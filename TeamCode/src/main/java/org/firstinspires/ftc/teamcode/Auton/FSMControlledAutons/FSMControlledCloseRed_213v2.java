@@ -238,6 +238,7 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
                     pathState = 203;
                     pathTimer.reset();
                 }
+                break;
             case 203:
                 if (!sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING)) {
                     // go intake from row 1
