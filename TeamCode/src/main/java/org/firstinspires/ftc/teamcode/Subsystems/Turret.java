@@ -38,7 +38,7 @@ public class Turret {
     public static double odomKp = 4.75;
     public static double odomKi = 0.0;
     public static double odomKd = 0.18;
-    public static double odomKf = 0.0;
+    public static double odomKf = 0.005;
     public static double odomDeadband = 0.01;       // rotations — skip PID inside this range
     public static double odomIntegralClamp = 5.0;   // max integral accumulation
     private double odomIntegral = 0;
@@ -47,9 +47,9 @@ public class Turret {
 
     // === Turret Limelight PID ===
     // Used when limelight sees the target — finer, short-range correction
-    public static double llKp = 3.0;
+    public static double llKp = 4.75;
     public static double llKi = 0.0;
-    public static double llKd = 0.15;
+    public static double llKd = 0.25;
     public static double llKf = 0.0;
     public static double llDeadband = 2.0;          // degrees — skip PID inside this range
     public static double llIntegralClamp = 5.0;     // max integral accumulation

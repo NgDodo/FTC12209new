@@ -235,7 +235,7 @@ public class FSMControlledCloseRed_P123 extends OpMode {
                 break;
             /// INTAKE + SHOOT ROW 1 ARTIFACTS (3)
             case 400:
-                if (follower.getPathCompletion() > 0.5) {
+                if (follower.getPathCompletion() < 0.5) {
                     follower.setMaxPower(0.5);
                 }
                 if (!followerBusy) {
@@ -363,8 +363,8 @@ public class FSMControlledCloseRed_P123 extends OpMode {
                 .addPath(
                         new BezierCurve(
                                 new Pose(94.500, 83.500),
-                                new Pose(81.217, 36.895),
-                                new Pose(125.500, 35.500)
+                                new Pose(70.564, 34.436),
+                                new Pose(124.500, 35.100)
                         )
                 )
                 .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
@@ -373,7 +373,7 @@ public class FSMControlledCloseRed_P123 extends OpMode {
         Path9ShootRow3 = follower.pathBuilder()
                 .addPath(
                         new BezierLine(
-                                new Pose(124.500, 35.500),
+                                new Pose(124.500, 35.100),
                                 new Pose(90.000, 120.000)
                         )
                 )

@@ -27,6 +27,8 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
 
     public static PathChain Path1, Path2, Path3, Path4, Path5, Path6, Path7, Path8;
 
+
+
     private Intake intake;
     private Sorter sorter;
     private Turret turret;
@@ -37,7 +39,7 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
 
     private boolean lastFollowerBusyState = false;
 
-    public static int desiredFlywheelRPM = 3720;
+    public static int desiredFlywheelRPM = 3650;
 
     @Override
     public void init() {
@@ -400,9 +402,9 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
                 .build();
 
         Path8 = follower.pathBuilder().addPath(
-                        new BezierCurve(
+                        new BezierLine(
                                 new Pose(124.500, 35.100),
-                                new Pose(84.000, 30.000),
+
                                 new Pose(84.000, 120.000)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(11))
