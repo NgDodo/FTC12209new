@@ -26,9 +26,6 @@ public class FSMControlledCloseBlue_213v2 extends OpMode {
     private ElapsedTime pathTimer;
 
     public static PathChain Path1, Path2, Path3, Path4, Path5, Path6, Path7, Path8;
-
-
-
     private Intake intake;
     private Sorter sorter;
     private Turret turret;
@@ -231,7 +228,10 @@ public class FSMControlledCloseBlue_213v2 extends OpMode {
                 /// INTAKE + SHOOT ROW 1 ARTIFACTS (2)
 
             case 202: // moving back to shooting spot
-                if (!followerBusy) { // once we reach shooting spot
+                if (!followerBusy && lastFollowerBusyState) {
+                    pathTimer.reset();
+                }
+                if (!followerBusy && pathTimer.seconds() > 1.0) { // once we reach shooting spot
                     // initiate shooting set #2
                     sorter.startShootingSequence(); // start shooting
                     pathState = 203;
@@ -290,16 +290,9 @@ public class FSMControlledCloseBlue_213v2 extends OpMode {
                     if (lastFollowerBusyState && !follower.isBusy()) { // just finished path
                         pathTimer.reset();
                     }
-                    if (!followerBusy && pathTimer.seconds() > 1.0) { // delay of 3 seconds, if balls are not intaken by then
+                    if (sorter.allChambersFull() || (!followerBusy && pathTimer.seconds() > 1.0)) { // delay of 3 seconds, if balls are not intaken by then
                         follower.setMaxPower(1.0);
                         follower.followPath(Path8); // give up, go to shooting spot
-                        intake.intakeState = Intake.intakeStateFSM.INTAKE_STOP;
-                        pathState = 401;
-                        pathTimer.reset();
-                    }
-                    if (sorter.allChambersFull()) { // successfully intaked all 3 balls
-                        follower.setMaxPower(1.0);
-                        follower.followPath(Path8);
                         intake.intakeState = Intake.intakeStateFSM.INTAKE_STOP;
                         pathState = 401;
                         pathTimer.reset();
