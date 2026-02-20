@@ -197,7 +197,7 @@ public class FSMControlledCloseRed_P123 extends OpMode {
                     pathTimer.reset();
                 }
                 if (follower.getPathCompletion() > 0.1) {
-                    follower.setMaxPower(0.5);
+                    follower.setMaxPower(0.4);
                 }
                 if (sorter.allChambersFull() || (!followerBusy && pathTimer.seconds() > 1.0)) { // successfully intaked all 3 balls
                     follower.setMaxPower(1.0);
@@ -235,8 +235,8 @@ public class FSMControlledCloseRed_P123 extends OpMode {
                 break;
             /// INTAKE + SHOOT ROW 1 ARTIFACTS (3)
             case 400:
-                if (follower.getPathCompletion() < 0.5) {
-                    follower.setMaxPower(0.5);
+                if (follower.getPathCompletion() > 0.5) {
+                    follower.setMaxPower(0.4);
                 }
                 if (!followerBusy) {
                     if (lastFollowerBusyState && !follower.isBusy()) { // just finished path
@@ -309,7 +309,7 @@ public class FSMControlledCloseRed_P123 extends OpMode {
                 .addPath(
                         new BezierCurve(
                                 new Pose(123.000, 84.000),
-                                new Pose(121.000, 76.000),
+                                new Pose(123, 76.000),
                                 new Pose(124.000, 73.000)
                         )
                 )
