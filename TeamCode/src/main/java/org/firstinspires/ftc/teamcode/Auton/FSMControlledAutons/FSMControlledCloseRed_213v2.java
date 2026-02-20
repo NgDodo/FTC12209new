@@ -225,6 +225,7 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
                     pathState = 202;
                     pathTimer.reset();
                 }
+                break;
             /// INTAKE + SHOOT ROW 1 ARTIFACTS (2)
 
             case 202: // moving back to shooting spot

@@ -226,6 +226,7 @@ public class FSMControlledCloseBlue_213v2 extends OpMode {
                     pathTimer.reset();
                 }
                 /// INTAKE + SHOOT ROW 1 ARTIFACTS (2)
+                break;
 
             case 202: // moving back to shooting spot
                 if (!followerBusy && lastFollowerBusyState) {
