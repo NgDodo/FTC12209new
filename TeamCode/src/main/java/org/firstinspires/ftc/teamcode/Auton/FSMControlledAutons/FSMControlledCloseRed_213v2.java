@@ -27,8 +27,6 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
 
     public static PathChain Path1, Path2, Path3, Path4, Path5, Path6, Path7, Path8;
 
-
-
     private Intake intake;
     private Sorter sorter;
     private Turret turret;
@@ -149,7 +147,7 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
             case 300:
                 if (!follower.isBusy() && pathTimer.seconds() > 3.0) {
                     pathState = 400; // Continue to Path 2
-                    follower.setMaxPower(0.5);
+                    follower.setMaxPower(.3);
                     follower.followPath(Path5);
                     pathTimer.reset();
                 }
@@ -210,7 +208,7 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
                     pathTimer.reset();
                 }
                 if (follower.getPathCompletion() > 0.35 && follower.getPathCompletion() < 0.7) {
-                    follower.setMaxPower(0.39);
+                    follower.setMaxPower(.3);
                 }
                 if (sorter.allChambersFull() || (!followerBusy && pathTimer.seconds() > 1.0)) { // successfully intaked all 3 balls
                     follower.setMaxPower(1.0);
@@ -251,8 +249,8 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
                 if (lastFollowerBusyState && !followerBusy) { // just finished path, reset timer to wait for artifacts
                     pathTimer.reset();
                 }
-                if (follower.getPathCompletion() > 0.1) {
-                    follower.setMaxPower(0.39);
+                if (follower.getPathCompletion() > 0.025) {
+                    follower.setMaxPower(.25);
                 }
                 if (sorter.allChambersFull() || (!followerBusy && pathTimer.seconds() > 1.0)) { // successfully intaked all 3 balls
                     follower.setMaxPower(1.0);
@@ -282,8 +280,8 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
                 break;
             /// INTAKE + SHOOT ROW 1 ARTIFACTS (3)
             case 400:
-                if (follower.getPathCompletion() > 0.5) {
-                    follower.setMaxPower(0.39);
+                if (follower.getPathCompletion() > 0.425) {
+                    follower.setMaxPower(.3);
                 }
                 if (!followerBusy) {
                     if (lastFollowerBusyState && !follower.isBusy()) { // just finished path
@@ -335,7 +333,7 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
                         new BezierLine(
                                 new Pose(123.100, 123.100),
 
-                                new Pose(100.000, 100.000)
+                                new Pose(100, 100)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(36), Math.toRadians(0))
 
@@ -343,9 +341,9 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
 
         Path2 = follower.pathBuilder().addPath(
                         new BezierCurve(
-                                new Pose(84.000, 84.000),
-                                new Pose(76.130, 54.976),
-                                new Pose(125.000, 59.500)
+                                new Pose(100, 100),
+                                new Pose(74, 54.976),
+                                new Pose(125.000, 56.00)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
 
@@ -353,9 +351,9 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
 
         Path3 = follower.pathBuilder().addPath(
                         new BezierCurve(
-                                new Pose(123.000, 59.500),
+                                new Pose(135, 57.500),
                                 new Pose(112, 65.5),
-                                new Pose(123.000, 69.000)
+                                new Pose(122.000, 69.000)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(5))
 
@@ -363,7 +361,7 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
 
         Path4 = follower.pathBuilder().addPath(
                         new BezierCurve(
-                                new Pose(127.000, 67.500),
+                                new Pose(122, 69.000),
                                 new Pose(97.104, 60.133),
                                 new Pose(90.000, 84.000)
                         )
@@ -394,8 +392,8 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
         Path7 = follower.pathBuilder().addPath(
                         new BezierCurve(
                                 new Pose(90.000, 84.000),
-                                new Pose(70.564, 34.436),
-                                new Pose(124.500, 35.100)
+                                new Pose(68, 34.436),
+                                new Pose(124.500, 33.100)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
 
@@ -403,9 +401,9 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
 
         Path8 = follower.pathBuilder().addPath(
                         new BezierLine(
-                                new Pose(124.500, 35.100),
+                                new Pose(124.500, 33.100),
 
-                                new Pose(84.000, 120.000)
+                                new Pose(87.000, 115.000)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(11))
 
