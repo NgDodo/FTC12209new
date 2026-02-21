@@ -47,9 +47,9 @@ public class Turret {
 
     // === Turret Limelight PID ===
     // Used when limelight sees the target — finer, short-range correction
-    public static double llKp = 4.75;
+    public static double llKp = 6;
     public static double llKi = 0.0;
-    public static double llKd = 0.25;
+    public static double llKd = 0.5;
     public static double llKf = 0.0;
     public static double llDeadband = 2.0;          // degrees — skip PID inside this range
     public static double llIntegralClamp = 5.0;     // max integral accumulation
