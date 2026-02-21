@@ -39,7 +39,7 @@ public class Turret {
     public static double odomKi = 0.0;
     public static double odomKd = 0.18;
     public static double odomKf = 0.005;
-    public static double odomDeadband = 0.01;       // rotations — skip PID inside this range
+    public static double odomDeadband = 0.005;       // rotations — skip PID inside this range
     public static double odomIntegralClamp = 5.0;   // max integral accumulation
     private double odomIntegral = 0;
     private double odomLastError = 0;
@@ -51,7 +51,7 @@ public class Turret {
     public static double llKi = 0.0;
     public static double llKd = 0.5;
     public static double llKf = 0.0;
-    public static double llDeadband = 2.0;          // degrees — skip PID inside this range
+    public static double llDeadband = 1.0;          // degrees — skip PID inside this range
     public static double llIntegralClamp = 5.0;     // max integral accumulation
     private double llIntegral = 0;
     private double llLastError = 0;

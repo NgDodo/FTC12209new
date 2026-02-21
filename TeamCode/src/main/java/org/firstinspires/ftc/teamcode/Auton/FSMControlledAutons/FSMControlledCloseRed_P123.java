@@ -51,7 +51,6 @@ public class FSMControlledCloseRed_P123 extends OpMode {
     public void init() {
         follower = Constants.createFollower(hardwareMap);
         follower.setStartingPose(new Pose(123.1, 123.1, Math.toRadians(36)));
-
         intake = new Intake(hardwareMap);
         sorter = new Sorter(hardwareMap);
         turret = new Turret(hardwareMap, "RED");
@@ -299,7 +298,7 @@ public class FSMControlledCloseRed_P123 extends OpMode {
                 .addPath(
                         new BezierLine(
                                 new Pose(93.867, 84.000),
-                                new Pose(123.500, 84.000)
+                                new Pose(123.000, 84.000)
                         )
                 )
                 .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
@@ -332,7 +331,7 @@ public class FSMControlledCloseRed_P123 extends OpMode {
                                 new Pose(95.000, 84.000),
                                 new Pose(88.075, 56.338),
                                 new Pose(106.383, 58.577),
-                                new Pose(126.000, 59.300)
+                                new Pose(125.000, 56.00)
                         )
                 )
                 .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
@@ -364,7 +363,7 @@ public class FSMControlledCloseRed_P123 extends OpMode {
                         new BezierCurve(
                                 new Pose(94.500, 83.500),
                                 new Pose(70.564, 34.436),
-                                new Pose(124.500, 35.100)
+                                new Pose(124.500, 33.100)
                         )
                 )
                 .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
@@ -374,10 +373,10 @@ public class FSMControlledCloseRed_P123 extends OpMode {
                 .addPath(
                         new BezierLine(
                                 new Pose(124.500, 35.100),
-                                new Pose(90.000, 120.000)
+                                new Pose(87.000, 115.000)
                         )
                 )
-                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(15))
+                .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(11))
                 .build();
     }
 }
