@@ -339,25 +339,25 @@ public class FSMControlledCloseBlue_213v2 extends OpMode {
 
         Path2 = follower.pathBuilder().addPath(
                         new BezierCurve(
-                                new Pose(141.5 - 84.000,   84.000),    // Mirrored Y
-                                new Pose(141.5 - 76.130,  54.976),    // Mirrored Y
-                                new Pose(141.5 - 125.000,  59.500)    // Mirrored Y
+                                new Pose(141.5 - 100.000,   00.000),    // Mirrored Y
+                                new Pose(141.5 - 74,  54.976),    // Mirrored Y
+                                new Pose(141.5 - 125.000,  56.000)    // Mirrored Y
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
                 .build();
 
         Path3 = follower.pathBuilder().addPath(
                         new BezierCurve(
-                                new Pose(141.5 - 123.000,  59.500),   // Mirrored Y
+                                new Pose(141.5 - 135.000,  57.500),   // Mirrored Y
                                 new Pose(141.5 - 112,   65.5),         // Mirrored Y
-                                new Pose(141.5 - 123.000,  69.000)    // Mirrored Y
+                                new Pose(141.5 - 122.000,  69.000)    // Mirrored Y
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(175)) // Mirrored heading
                 .build();
 
         Path4 = follower.pathBuilder().addPath(
                         new BezierCurve(
-                                new Pose(141.5 - 127.000,  67.500),   // Mirrored Y
+                                new Pose(141.5 - 122.000,  69.000),   // Mirrored Y
                                 new Pose(141.5 - 97.104, 60.133),    // Mirrored Y
                                 new Pose(141.5 - 90.000,  84.000)     // Mirrored Y
                         )
@@ -383,16 +383,16 @@ public class FSMControlledCloseBlue_213v2 extends OpMode {
         Path7 = follower.pathBuilder().addPath(
                         new BezierCurve(
                                 new Pose(141.5 - 90.000,   84.000),    // Mirrored Y
-                                new Pose(141.5 - 70.564,   34.436),    // Mirrored Y
-                                new Pose(141.5 - 124.500,   35.100)    // Mirrored Y
+                                new Pose(141.5 - 68,   34.436),    // Mirrored Y
+                                new Pose(141.5 - 124.500,   33.100)    // Mirrored Y
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
                 .build();
 
         Path8 = follower.pathBuilder().addPath(
                         new BezierLine(
-                                new Pose(141.5 - 124.500,  35.100),   // Mirrored Y
-                                new Pose(141.5 -84.000,  120.000)    // Mirrored Y
+                                new Pose(141.5 - 124.500,  33.100),   // Mirrored Y
+                                new Pose(141.5 - 87.000,  115.000)    // Mirrored Y
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(169)) // Mirrored heading
                 .build();
