@@ -12,6 +12,7 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 import org.firstinspires.ftc.teamcode.Subsystems.Intake;
 import org.firstinspires.ftc.teamcode.Subsystems.Sorter;
 import org.firstinspires.ftc.teamcode.Subsystems.Turret;
+import org.firstinspires.ftc.teamcode.Subsystems.TurretV2;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 @TeleOp(name = "Subsystem Teleop---RED", group = "!")
@@ -21,7 +22,7 @@ public class subsystemTeleopRed extends OpMode {
 
     Intake intake;
     Sorter sorter;
-    Turret turret;
+    TurretV2 turret;
 
     private Follower follower;
     public static Pose startingPose;
@@ -32,7 +33,6 @@ public class subsystemTeleopRed extends OpMode {
 
     private boolean runTelemetry = false;
     private ElapsedTime telemetryLimiter = new ElapsedTime();
-
 
     @Override
     public void init() {
@@ -56,7 +56,7 @@ public class subsystemTeleopRed extends OpMode {
 
         intake = new Intake(hardwareMap);
         sorter = new Sorter(hardwareMap);
-        turret = new Turret(hardwareMap, "RED");
+        turret = new TurretV2(hardwareMap, "RED");
 
         loopTime.reset();
     }
@@ -66,6 +66,13 @@ public class subsystemTeleopRed extends OpMode {
     }
     @Override
     public void loop() {
+        follower.update();
+
+        // === Reset Follower Pose === //
+        boolean bPressed = gamepad1.b;
+        if (bPressed && !lastBButton) {
+            follower.setPose(new Pose(123.1, 123.1, Math.toRadians(36)));
+        }
 
         // === Drive Train ===
         double y = applyDeadzone(-gamepad1.left_stick_y);
@@ -80,27 +87,6 @@ public class subsystemTeleopRed extends OpMode {
         frontRightMotor.setPower(clipLowPower(fr / max));
         backRightMotor.setPower(clipLowPower(br / max));
 
-        follower.update();
-
-        // === Reset Follower Pose === //
-        boolean bPressed = gamepad1.b;
-
-        if (bPressed && !lastBButton) {
-            follower.setPose(new Pose(123.1, 123.1, Math.toRadians(36)));
-        }
-        /// Verbose Telemetry
-        /*
-        if (bPressed && !lastBButton) {
-            if (runTelemetry) {
-                runTelemetry = false;
-            } else {
-                runTelemetry = true;
-            }
-        }
-        */
-
-
-
         // === Update Subsystems === //
         intake.updateIntake(gamepad1);
         sorter.updateSorter(gamepad1);
@@ -108,8 +94,8 @@ public class subsystemTeleopRed extends OpMode {
 
         // === Telemetry === //
         updateTelemetry();
-        loopTime.reset();
 
+        loopTime.reset();
         lastBButton = bPressed;
     }
     private void updateTelemetry() {
@@ -143,6 +129,11 @@ public class subsystemTeleopRed extends OpMode {
             telemetry.addData("Limelight Tracking? ", turret.limelightTracking);
             telemetry.addData("TurretMOTIF", sorter.currentMotif);
 
+            telemetry.addLine("FOLLOWER");
+            telemetry.addData("X Velocity Component ", follower.getVelocity().getXComponent());
+            telemetry.addData("Y Velocity Component ", follower.getVelocity().getYComponent());
+
+            turret.postTelemetryOnlyGoalPose(telemetry, follower);
             telemetry.update();
             telemetryLimiter.reset();
         }
