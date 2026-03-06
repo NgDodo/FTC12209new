@@ -87,7 +87,7 @@ public class TurretV2 {
     private static final double IDLE_RPM = 2000;
 
     // === Shooter presets ===
-    private final int[] rpmPresets = {3900, 4900};
+    private final int[] rpmPresets = {3100, 3800};
     private int presetIndex = -1;
     public double targetRPM = 0;
     private boolean lastRightBumper = false;
