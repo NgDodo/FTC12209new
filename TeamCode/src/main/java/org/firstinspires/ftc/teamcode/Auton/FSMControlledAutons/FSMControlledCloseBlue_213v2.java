@@ -42,7 +42,7 @@ public class FSMControlledCloseBlue_213v2 extends OpMode {
     public void init() {
         follower = Constants.createFollower(hardwareMap);
         // Mirror the starting pose for Blue Alliance: Y = 144 - old_Y, heading = -old_heading
-        follower.setStartingPose(new Pose(144-123.1, 123.1, Math.toRadians(144)));
+        follower.setStartingPose(new Pose(147.000 - 123.1, 123.1, Math.toRadians(144)));
 
         intake = new Intake(hardwareMap);
         sorter = new Sorter(hardwareMap);
@@ -98,11 +98,8 @@ public class FSMControlledCloseBlue_213v2 extends OpMode {
         }
 
         if (runSubsystemsAlso) {
-            pathState = autonomousPathUpdateFull();
-        }
-        else {
             if (globalAutonTime.seconds() <= 29.3) {
-                pathState = autonomousPathUpdateOnlyPathMovements();
+                pathState = autonomousPathUpdateFull();
             }
             if (globalAutonTime.seconds() > 29.3 && pathState != -101) {
                 sorter.resetSorterAtEndOfAuton(pathState);
@@ -119,64 +116,6 @@ public class FSMControlledCloseBlue_213v2 extends OpMode {
             telemetryLimiter.reset();
         }
         loopTime.reset();
-    }
-
-    public int autonomousPathUpdateOnlyPathMovements() {
-        switch (pathState) {
-            case 0: // Path 1
-                if (!follower.isBusy() && pathTimer.seconds() > 3.0) {
-                    pathState = 100;
-                    follower.followPath(Path2);
-                    pathTimer.reset();
-                }
-                break;
-            case 100: // Path 2
-                if (!follower.isBusy() && pathTimer.seconds() > 3.0) { // wait until reaches path
-                    pathState = 200; // Continue to Path 2
-                    follower.setMaxPower(0.4);
-                    follower.followPath(Path3);
-                    pathTimer.reset();
-                }
-            case 200:
-                if (!follower.isBusy() && pathTimer.seconds() > 3.0) {
-                    pathState = 300; // Continue to Path 2
-                    follower.setMaxPower(1.0);
-                    follower.followPath(Path4);
-                    pathTimer.reset();
-                }
-            case 300:
-                if (!follower.isBusy() && pathTimer.seconds() > 3.0) {
-                    pathState = 400; // Continue to Path 2
-                    follower.setMaxPower(0.5);
-                    follower.followPath(Path5);
-                    pathTimer.reset();
-                }
-            case 400:
-                if (!follower.isBusy() && pathTimer.seconds() > 3.0) {
-                    pathState = 500; // Continue to Path 2
-                    follower.setMaxPower(1.0);
-                    follower.followPath(Path6);
-                    pathTimer.reset();
-                }
-            case 500:
-                if (!follower.isBusy() && pathTimer.seconds() > 3.0) {
-                    pathState = 600; // Continue to Path 2
-                    follower.setMaxPower(0.4);
-                    follower.followPath(Path7);
-                    pathTimer.reset();
-                }
-            case 600:
-                if (!follower.isBusy() && pathTimer.seconds() > 3.0) {
-                    pathState = -1; // Continue to Path 2
-                    follower.setMaxPower(1.0);
-                    follower.followPath(Path8);
-                    pathTimer.reset();
-                }
-            case -1:
-                //end
-                break;
-        }
-        return pathState;
     }
 
     public int autonomousPathUpdateFull() {
@@ -208,7 +147,7 @@ public class FSMControlledCloseBlue_213v2 extends OpMode {
                     pathTimer.reset();
                 }
                 if (follower.getPathCompletion() > 0.35 && follower.getPathCompletion() < 0.7) {
-                    follower.setMaxPower(0.39);
+                    follower.setMaxPower(.325);
                 }
                 if (sorter.allChambersFull() || (!followerBusy && pathTimer.seconds() > 1.0)) { // successfully intaked all 3 balls
                     follower.setMaxPower(1.0);
@@ -225,8 +164,8 @@ public class FSMControlledCloseBlue_213v2 extends OpMode {
                     pathState = 202;
                     pathTimer.reset();
                 }
-                /// INTAKE + SHOOT ROW 1 ARTIFACTS (2)
                 break;
+            /// INTAKE + SHOOT ROW 1 ARTIFACTS (2)
 
             case 202: // moving back to shooting spot
                 if (!followerBusy && lastFollowerBusyState) {
@@ -253,8 +192,8 @@ public class FSMControlledCloseBlue_213v2 extends OpMode {
                 if (lastFollowerBusyState && !followerBusy) { // just finished path, reset timer to wait for artifacts
                     pathTimer.reset();
                 }
-                if (follower.getPathCompletion() > 0.1) {
-                    follower.setMaxPower(0.39);
+                if (follower.getPathCompletion() > 0.025) {
+                    follower.setMaxPower(.30);
                 }
                 if (sorter.allChambersFull() || (!followerBusy && pathTimer.seconds() > 1.0)) { // successfully intaked all 3 balls
                     follower.setMaxPower(1.0);
@@ -284,8 +223,8 @@ public class FSMControlledCloseBlue_213v2 extends OpMode {
                 break;
             /// INTAKE + SHOOT ROW 1 ARTIFACTS (3)
             case 400:
-                if (follower.getPathCompletion() > 0.5) {
-                    follower.setMaxPower(0.39);
+                if (follower.getPathCompletion() > 0.475) {
+                    follower.setMaxPower(.4);
                 }
                 if (!followerBusy) {
                     if (lastFollowerBusyState && !follower.isBusy()) { // just finished path
@@ -331,68 +270,68 @@ public class FSMControlledCloseBlue_213v2 extends OpMode {
 
         Path1 = follower.pathBuilder().addPath(
                         new BezierLine(
-                                new Pose(141.5- 123.100,   123.100), // Mirrored Y
-                                new Pose(141.5- 100.000,   100.000)  // Mirrored Y
+                                new Pose(142.500 - 123.100,   123.100), // Mirrored Y
+                                new Pose(142.500 - 100.000,   100.000)  // Mirrored Y
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(144), Math.toRadians(180)) // Mirrored heading
                 .build();
 
         Path2 = follower.pathBuilder().addPath(
                         new BezierCurve(
-                                new Pose(141.5 - 100.000,   00.000),    // Mirrored Y
-                                new Pose(141.5 - 74,  54.976),    // Mirrored Y
-                                new Pose(141.5 - 125.000,  56.000)    // Mirrored Y
+                                new Pose(142.500 - 100.000,   100.000),    // Mirrored Y
+                                new Pose(144.000 - 74,  54.976),    // Mirrored Y
+                                new Pose(139.000 - 125.000,  56.000)    // Mirrored Y
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
                 .build();
 
         Path3 = follower.pathBuilder().addPath(
                         new BezierCurve(
-                                new Pose(141.5 - 135.000,  57.500),   // Mirrored Y
-                                new Pose(141.5 - 112,   65.5),         // Mirrored Y
-                                new Pose(141.5 - 122.000,  69.000)    // Mirrored Y
+                                new Pose(144.000 - 135.000,  57.500),   // Mirrored Y
+                                new Pose(142.500 - 112,   65.5),         // Mirrored Y
+                                new Pose(139.000 - 122.000,  69.000)    // Mirrored Y
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(175)) // Mirrored heading
                 .build();
 
         Path4 = follower.pathBuilder().addPath(
                         new BezierCurve(
-                                new Pose(141.5 - 122.000,  69.000),   // Mirrored Y
-                                new Pose(141.5 - 97.104, 60.133),    // Mirrored Y
-                                new Pose(141.5 - 90.000,  84.000)     // Mirrored Y
+                                new Pose(142.500 - 122.000,  69.000),   // Mirrored Y
+                                new Pose(142.500 - 97.104, 60.133),    // Mirrored Y
+                                new Pose(142.500 - 90.000,  84.000)     // Mirrored Y
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(175), Math.toRadians(180)) // Mirrored heading
                 .build();
 
         Path5 = follower.pathBuilder().addPath(
                         new BezierLine(
-                                new Pose(141.5 - 90.000,   84.000),    // Mirrored Y
-                                new Pose(141.5 - 123.000,   84.000)    // Mirrored Y
+                                new Pose(142.500 - 90.000,   84.000),    // Mirrored Y
+                                new Pose(139.000 - 123.000,   84.000)    // Mirrored Y
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
                 .build();
 
         Path6 = follower.pathBuilder().addPath(
                         new BezierLine(
-                                new Pose(141.5 - 123.000,  84.000),   // Mirrored Y
-                                new Pose(141.5 - 90.000,  84.000)     // Mirrored Y
+                                new Pose(144.500 - 123.000,  84.000),   // Mirrored Y
+                                new Pose(142.500 - 90.000,  84.000)     // Mirrored Y
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
                 .build();
 
         Path7 = follower.pathBuilder().addPath(
                         new BezierCurve(
-                                new Pose(141.5 - 90.000,   84.000),    // Mirrored Y
-                                new Pose(141.5 - 68,   34.436),    // Mirrored Y
-                                new Pose(141.5 - 124.500,   33.100)    // Mirrored Y
+                                new Pose(142.500 - 90.000,   84.000),    // Mirrored Y
+                                new Pose(142.500 - 68,   34.436),    // Mirrored Y
+                                new Pose(138.000 - 124.500,   33.100)    // Mirrored Y
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(180))
                 .build();
 
         Path8 = follower.pathBuilder().addPath(
                         new BezierLine(
-                                new Pose(141.5 - 124.500,  33.100),   // Mirrored Y
-                                new Pose(141.5 - 87.000,  115.000)    // Mirrored Y
+                                new Pose(144.500 - 124.500,  33.100),   // Mirrored Y
+                                new Pose(142.500 - 87.000,  115.000)    // Mirrored Y
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(180), Math.toRadians(169)) // Mirrored heading
                 .build();

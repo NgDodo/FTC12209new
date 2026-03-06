@@ -90,6 +90,7 @@ public class Sorter {
     private double oscillating_LED_color = 0.0;
 
     private static Gamepad gamepad1;
+    public int manualTeleopOffset = 0;
 
     public Sorter(HardwareMap hardwareMap){
         this.sorterState = sorterStateFSM.INTAKE_STATIC;
@@ -553,7 +554,7 @@ public class Sorter {
      * @return Shortest error (positive = clockwise, negative = counter-clockwise)
      */
     private int _calculateShortestError(int current, int target) {
-        int error = target - current;
+        int error = target + manualTeleopOffset - current;
 
         // If error is more than half a rotation, go the other way
         if (error > FULL_ROT / 2) {
@@ -788,6 +789,10 @@ public class Sorter {
             startSorterMove(targetPos);
         }
         autoShootState = 0;
+    }
+
+    public void updateManualOffset (int amount_to_change) {
+        manualTeleopOffset += amount_to_change;
     }
 
     public void resetSorterAtEndOfAuton(int trigger) {

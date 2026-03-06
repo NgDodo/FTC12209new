@@ -26,7 +26,7 @@ public class subsystemTeleopBlue extends OpMode {
     private Follower follower;
     public static Pose startingPose;
 
-    private boolean lastBButton, lastXButton;
+    private boolean lastBButton, lastXButton, lastRightBumperPressed, lastLeftBumperPressed, lastDpadLeftPressed, lastDpadRightPressed;
 
     private ElapsedTime loopTime = new ElapsedTime();
 
@@ -36,7 +36,7 @@ public class subsystemTeleopBlue extends OpMode {
 
     @Override
     public void init() {
-        startingPose = new Pose(84, 120, Math.toRadians(11));
+        startingPose = new Pose(142.500 - 87.000,  115.000, Math.toRadians(169));
         follower = Constants.createFollower(hardwareMap);
         follower.setStartingPose(startingPose == null ? new Pose() : startingPose);
         follower.update();
@@ -84,6 +84,10 @@ public class subsystemTeleopBlue extends OpMode {
 
         // === Reset Follower Pose === //
         boolean bPressed = gamepad1.b;
+        boolean rightBumperPressed = gamepad2.right_bumper;
+        boolean leftBumperPressed = gamepad2.left_bumper;
+        boolean dpadRightPressed = gamepad2.dpad_right;
+        boolean dpadLeftPressed = gamepad2.dpad_left;
 
         if (bPressed && !lastBButton) {
             follower.setPose(new Pose(123.1, 123.1, Math.toRadians(36)));
@@ -99,7 +103,20 @@ public class subsystemTeleopBlue extends OpMode {
         }
         */
 
+        /// update sorter manual offset
 
+        if (rightBumperPressed && !lastRightBumperPressed) {
+            turret.updateManualOffset(0.05);
+        }
+        if (leftBumperPressed && !lastLeftBumperPressed) {
+            turret.updateManualOffset(-0.05);
+        }
+        if (dpadRightPressed && !lastDpadRightPressed) {
+            sorter.updateManualOffset(200);
+        }
+        if (dpadLeftPressed && !lastDpadLeftPressed) {
+            sorter.updateManualOffset(-200);
+        }
 
         // === Update Subsystems === //
         intake.updateIntake(gamepad1);
@@ -111,6 +128,10 @@ public class subsystemTeleopBlue extends OpMode {
         loopTime.reset();
 
         lastBButton = bPressed;
+        lastRightBumperPressed = rightBumperPressed;
+        lastLeftBumperPressed = leftBumperPressed;
+        lastDpadLeftPressed = dpadLeftPressed;
+        lastDpadRightPressed = dpadRightPressed;
     }
     private void updateTelemetry() {
         if (runTelemetry) {
@@ -141,6 +162,7 @@ public class subsystemTeleopBlue extends OpMode {
             telemetry.addData("Target RPM", turret.targetRPM);
             telemetry.addData("Actual RPM", String.format("%.0f", currentRPM));
             telemetry.addData("Limelight Tracking? ", turret.limelightTracking);
+            telemetry.addData("TurretMOTIF", sorter.currentMotif);
 
             telemetry.update();
             telemetryLimiter.reset();

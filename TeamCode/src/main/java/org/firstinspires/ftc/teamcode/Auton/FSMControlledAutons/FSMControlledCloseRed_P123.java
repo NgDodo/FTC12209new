@@ -309,7 +309,7 @@ public class FSMControlledCloseRed_P123 extends OpMode {
                         new BezierCurve(
                                 new Pose(123.000, 84.000),
                                 new Pose(123, 76.000),
-                                new Pose(124.000, 73.000)
+                                new Pose(124.000, 75.000)
                         )
                 )
                 .setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(70))

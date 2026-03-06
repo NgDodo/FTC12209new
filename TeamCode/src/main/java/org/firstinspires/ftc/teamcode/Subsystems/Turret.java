@@ -87,7 +87,7 @@ public class Turret {
     private static final double IDLE_RPM = 2000;
 
     // === Shooter presets ===
-    private final int[] rpmPresets = {3900, 4900};
+    private final int[] rpmPresets = {3825, 4900};
     private int presetIndex = -1;
     public double targetRPM = 0;
     private boolean lastRightBumper = false;
@@ -112,6 +112,8 @@ public class Turret {
 
     public TurretMOTIF currentMotif;
     public String allianceColor;
+
+    public double manualTeleopOffset = 0.0;
 
     public Turret(HardwareMap hardwareMap, String _allianceColor) {
         switch (_allianceColor) {
@@ -283,7 +285,7 @@ public class Turret {
      */
     private double runOdomPID(double turretDesiredRelativeOffset) {
         double turretDesiredDegrees = Math.toDegrees(turretDesiredRelativeOffset);
-        double currentRotations = turretRotationMotor.getCurrentPosition() / TURRET_TICKS_PER_REV;
+        double currentRotations = turretRotationMotor.getCurrentPosition() / TURRET_TICKS_PER_REV - manualTeleopOffset;
         double desiredRotations = turretDesiredDegrees / 360.0;
         double error = desiredRotations - currentRotations;
 
@@ -380,6 +382,9 @@ public class Turret {
         telemetry.addLine();
     }
 
+    public void updateManualOffset (double amount_to_change) {
+        manualTeleopOffset += amount_to_change;
+    }
     public void setFlywheelRPM(String shootingLocation) {
         if (shootingLocation.equals("FAR")) {
             targetRPM = rpmPresets[1];
