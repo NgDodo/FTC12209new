@@ -45,6 +45,25 @@ public class TurretV2 {
     private double odomLastError = 0;
     private long odomLastTime = 0;
 
+    // === Rotational Velocity Feedforward ===
+    // Drives the turret to counter-rotate at the same rate the robot is spinning,
+    // so fast robot rotations don't cause the turret to lag behind the goal.
+    // Uses follower.getVelocity().getAngularVelocity() directly — no differentiation needed.
+    //
+    // How to tune odomKff_rotation:
+    //   1. Cover the limelight so only odom-PID is active.
+    //   2. Set odomKff_rotation = 0. Spin the robot fast. Observe how far the
+    //      turret lags after the robot stops.
+    //   3. Increase odomKff_rotation in small steps (e.g. 0.005 at a time) and
+    //      repeat until the turret stays roughly on target during the spin.
+    //   4. If the turret now overshoots after the robot stops, back off slightly
+    //      or increase odomKd to dampen it.
+    //
+    // Units: motor power per (rad/s of robot angular velocity)
+    // Negative because when the robot rotates CCW (+), the turret must rotate
+    // CW (-) to hold its absolute heading — i.e. counter-rotation.
+    public static double odomKff_rotation = 0.0;    // start here, tune upward
+
     // === Turret Limelight PID ===
     // Used when limelight sees the target — finer, short-range correction
     public static double llKp = 4;
@@ -69,7 +88,8 @@ public class TurretV2 {
     private static final int APRILTAG_PIPELINE = 1;
 
     // === Turret Configuration ===
-    public static final double TURRET_TICKS_PER_REV = 1393.1;
+    public static final double TURRET_TICKS_PER_REV = 2596.363; // equals the (gear ratio x motor resolution x gearbox on motor)
+    // here, this equals (204/44) x (28 ticks/rev) x (20)
 
     public boolean limelightTracking = false;
 
@@ -113,6 +133,7 @@ public class TurretV2 {
 
     public TurretMOTIF currentMotif;
     public String allianceColor;
+    public double manualTeleopOffset = 0.0;
 
     public TurretV2(HardwareMap hardwareMap, String _allianceColor) {
         switch (_allianceColor) {
@@ -183,7 +204,6 @@ public class TurretV2 {
         lastLeftBumper = leftBumperPressed;
         lastRightBumper = rightBumperPressed;
     }
-
     private void updateFlywheelSpeed(Follower follower) {
         double currentVelocity = flywheelMotor.getVelocity();
         double currentRPM = (currentVelocity / TICKS_PER_REV_FLYWHEEL) * 60.0;
@@ -213,7 +233,7 @@ public class TurretV2 {
             double x_goal_distance = follower.getPose().getX() - ObeliskLocation.getX();
             double angle_to_goal = Math.atan2(y_goal_distance, x_goal_distance);
             double turretDesiredRelativeOffset = normalizeAngle(-angle_to_goal + follower.getHeading() + Math.PI);
-            runOdomPID(turretDesiredRelativeOffset);
+            runOdomPID(turretDesiredRelativeOffset, follower);
 
             LLResult result = limelight.getLatestResult();
             if (result != null && result.isValid()) {
@@ -276,7 +296,7 @@ public class TurretV2 {
 
                 double angle_to_goal = Math.atan2(y_goal_distance + velocityWiseGoalOffset.getY(), x_goal_distance + velocityWiseGoalOffset.getX());
                 double turretDesiredRelativeOffset = normalizeAngle(-angle_to_goal + follower.getHeading() + Math.PI);
-                runOdomPID(turretDesiredRelativeOffset);
+                runOdomPID(turretDesiredRelativeOffset, follower);
             }
         }
     }
@@ -314,16 +334,28 @@ public class TurretV2 {
     /**
      * Odometry-based PID — converts a desired relative angle offset into motor power.
      * Error is in rotations.
+     *
+     * The rotational-velocity feedforward term (-odomKff_rotation * angularVelocity)
+     * is added directly to the PID output. When the robot spins CCW (positive rad/s),
+     * the turret must spin CW (negative power) to hold its absolute heading, hence the
+     * negative sign. This keeps the turret on-target during fast robot rotations before
+     * positional error has a chance to build up.
      */
-    private double runOdomPID(double turretDesiredRelativeOffset) {
+    private double runOdomPID(double turretDesiredRelativeOffset, Follower follower) {
         double turretDesiredDegrees = Math.toDegrees(turretDesiredRelativeOffset);
-        double currentRotations = turretRotationMotor.getCurrentPosition() / TURRET_TICKS_PER_REV;
+        double currentRotations = turretRotationMotor.getCurrentPosition() / TURRET_TICKS_PER_REV - manualTeleopOffset;
         double desiredRotations = turretDesiredDegrees / 360.0;
         double error = desiredRotations - currentRotations;
 
+        // velocity in rad/s directly from Pedro's localizer — no differentiation needed.
+        double angularVelocity = follower.getAngularVelocity();
+        double rotationFeedforward = -odomKff_rotation * angularVelocity;
+
         if (Math.abs(error) < odomDeadband) {
+            // Still apply feedforward inside the deadband so the turret actively
+            // counter-rotates with the robot even when position error is tiny.
+            turretRotationMotor.setPower(Math.max(-1.0, Math.min(1.0, rotationFeedforward)));
             resetOdomPID();
-            turretRotationMotor.setPower(0);
             return error;
         }
 
@@ -340,7 +372,8 @@ public class TurretV2 {
         double output = (odomKp * error)
                 + (odomKi * odomIntegral)
                 + (odomKd * derivative)
-                + feedforward;
+                + feedforward
+                + rotationFeedforward;  // <-- counter-rotation feedforward
 
         output = Math.max(-1.0, Math.min(1.0, output));
         turretRotationMotor.setPower(output);
@@ -392,11 +425,14 @@ public class TurretV2 {
     }
 
     private double normalizeAngle(double angle) {
-        while (angle > Math.PI) angle -= 2 * Math.PI;
-        while (angle < -Math.PI) angle += 2 * Math.PI;
+        while (angle > 0.7*Math.PI) angle -= 2 * Math.PI;
+        while (angle < -1.3*Math.PI) angle += 2 * Math.PI;
         return angle;
     }
 
+    public void updateManualOffset (double amount_to_change) {
+        manualTeleopOffset += amount_to_change;
+    }
     public void postTelemetry(Telemetry telemetry) {
         double currentRPM = (flywheelMotor.getVelocity() / TICKS_PER_REV_FLYWHEEL) * 60.0;
         double rpmError = Math.abs(targetRPM - currentRPM);
@@ -423,6 +459,7 @@ public class TurretV2 {
         telemetry.addData("Desired Goal Y: ", y_goal_distance + velocityWiseGoalOffset.getY());
         telemetry.addLine();
     }
+
     public void setFlywheelRPM(String shootingLocation) {
         if (shootingLocation.equals("FAR")) {
             targetRPM = rpmPresets[1];

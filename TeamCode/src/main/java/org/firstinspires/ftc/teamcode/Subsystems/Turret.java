@@ -69,7 +69,8 @@ public class Turret {
     private static final int APRILTAG_PIPELINE = 1;
 
     // === Turret Configuration ===
-    public static final double TURRET_TICKS_PER_REV = 1393.1;
+    public static final double TURRET_TICKS_PER_REV = 2596.363; // equals the (gear ratio x motor resolution x gearbox on motor)
+                                // here, this equals (204/44) x (28 ticks/rev) x (20)
 
     public boolean limelightTracking = false;
 

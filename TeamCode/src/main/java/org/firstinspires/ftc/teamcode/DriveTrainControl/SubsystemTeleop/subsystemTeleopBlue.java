@@ -12,6 +12,7 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 import org.firstinspires.ftc.teamcode.Subsystems.Intake;
 import org.firstinspires.ftc.teamcode.Subsystems.Sorter;
 import org.firstinspires.ftc.teamcode.Subsystems.Turret;
+import org.firstinspires.ftc.teamcode.Subsystems.TurretV2;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 @TeleOp(name = "Subsystem Teleop---BLUE", group = "!")
@@ -21,7 +22,7 @@ public class subsystemTeleopBlue extends OpMode {
 
     Intake intake;
     Sorter sorter;
-    Turret turret;
+    TurretV2 turret;
 
     private Follower follower;
     public static Pose startingPose;
@@ -56,7 +57,7 @@ public class subsystemTeleopBlue extends OpMode {
 
         intake = new Intake(hardwareMap);
         sorter = new Sorter(hardwareMap);
-        turret = new Turret(hardwareMap, "BLUE");
+        turret = new TurretV2(hardwareMap, "BLUE");
 
         loopTime.reset();
     }
