@@ -191,24 +191,66 @@ public class Sorter {
     public static double SHOOT_POWER_SLOW = -1;   // gentle start to avoid jam
     public static double SHOOT_POWER_FAST = -1;   // full power once ball is clear
     public static int SHOOT_RAMP_TICKS = FULL_ROT / 7; // ~120° before kicking to full
+    // === Unjam constants ===
+    public static double UNJAM_STALL_SECONDS = 0.25;    // how long with no movement before unjamming
+    public static double UNJAM_REVERSE_SECONDS = 0.25;  // how long to reverse
+    public static int UNJAM_MOVEMENT_THRESHOLD = 100;   // ticks — below this counts as "not moving"
+    public static double UNJAM_REVERSE_POWER = 1;    // reverse power during unjam
+
+    // === Unjam State ===
+    private int lastEncoderSnapshot = 0;
+    private ElapsedTime stallTimer = new ElapsedTime();
+    private ElapsedTime unjamTimer = new ElapsedTime();
+    private boolean isUnjamming = false;
 
     private void updateShootSpin(Gamepad gamepad1) {
         if (!shootSpinStarted) {
             shootStartPosition = sorterEncoder.getCurrentPosition();
+            lastEncoderSnapshot = shootStartPosition;
             shootSpinStarted = true;
-            s3.setPower(1.0); // Start spinning S3 when shoot begins
+            isUnjamming = false;
+            stallTimer.reset();
+            s3.setPower(1.0);
         }
 
-        int ticksTraveled = Math.abs(sorterEncoder.getCurrentPosition() - shootStartPosition);
+        int currentPos = sorterEncoder.getCurrentPosition();
+        int ticksTraveled = Math.abs(currentPos - shootStartPosition);
 
+        // === Unjam check ===
+        if (isUnjamming) {
+            // Reversing — wait out the unjam duration then resume
+            sorterMotor.setPower(UNJAM_REVERSE_POWER);
+            if (unjamTimer.seconds() >= UNJAM_REVERSE_SECONDS) {
+                isUnjamming = false;
+                // Recalculate shoot start so ticksTraveled doesn't jump backward
+                shootStartPosition = currentPos - ticksTraveled;
+                lastEncoderSnapshot = currentPos;
+                stallTimer.reset();
+            }
+            return;
+        }
+
+        // Check if encoder has moved enough since last snapshot
+        if (Math.abs(currentPos - lastEncoderSnapshot) > UNJAM_MOVEMENT_THRESHOLD) {
+            // Moving fine — update snapshot and reset stall timer
+            lastEncoderSnapshot = currentPos;
+            stallTimer.reset();
+        } else if (stallTimer.seconds() >= UNJAM_STALL_SECONDS) {
+            // Stalled — trigger unjam
+            isUnjamming = true;
+            unjamTimer.reset();
+            return;
+        }
+
+        // === Normal shoot spin ===
         if (ticksTraveled < FULL_ROT * 2) {
             double power = (ticksTraveled < SHOOT_RAMP_TICKS) ? SHOOT_POWER_SLOW : SHOOT_POWER_FAST;
             sorterMotor.setPower(power);
         } else {
-            // Full rotation complete — wrap up
             sorterMotor.setPower(0.0);
-            s3.setPower(0.0); // Stop S3 when shoot finishes
+            s3.setPower(0.0);
             shootSpinStarted = false;
+            isUnjamming = false;
 
             chamberColors[0] = "NONE";
             chamberColors[1] = "NONE";
@@ -221,7 +263,6 @@ public class Sorter {
             if (gamepad1 != null) gamepad1.rumble(500);
         }
     }
-
     private void updateShootSpin() {
         updateShootSpin(null);
     }
