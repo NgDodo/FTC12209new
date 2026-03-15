@@ -23,10 +23,10 @@ import java.util.List;
 @Configurable
 public class TurretV2 {
     // === Flywheel PID ===
-    public static double flywheelKp = 0.0022;
+    public static double flywheelKp = 0.0035;
     public static double flywheelKi = 0.00001;
     public static double flywheelKd = 0.0;
-    public static double flywheelKF = 0.00025;
+    public static double flywheelKF = 0.00035;
     private double flywheelIntegral = 0;
     private double flywheelLastError = 0;
     private long flywheelLastTime = 0;
@@ -122,6 +122,7 @@ public class TurretV2 {
     private boolean lastBButton = false;
 
     public static double ARTIFACT_SHOOT_EXIT_VELOCITY = 80.0; /// in/sec
+    public static double FLYWHEEL_DISTANCE_VELOCITY_RATIO = 70.0;
     public Pose GoalLocation, ObeliskLocation;
 
     public enum TurretMOTIF {
@@ -130,6 +131,17 @@ public class TurretV2 {
         PPG,
         UNKNOWN
     }
+
+    public enum FlywheelStateFSM {
+        OFF,
+        AutomaticDistancing,
+        PresetLow1000,
+        Preset3100,
+        Preset3600
+    }
+
+    public FlywheelStateFSM flywheelState = FlywheelStateFSM.OFF;
+
 
     public TurretMOTIF currentMotif;
     public String allianceColor;
@@ -169,6 +181,7 @@ public class TurretV2 {
         odomLastTime = System.nanoTime();
         llLastTime = System.nanoTime();
 
+        flywheelState = FlywheelStateFSM.OFF;
         flywheelMotor = hardwareMap.get(DcMotorEx.class, "m3");
         flywheelMotor.setDirection(DcMotorSimple.Direction.REVERSE);
         turretRotationMotor = hardwareMap.get(DcMotorEx.class, "m2");
@@ -183,7 +196,8 @@ public class TurretV2 {
 
     public void updateTurret(Follower follower) {
         updateTurretRotation(follower);
-        updateFlywheelSpeed(follower);
+        // updateFlywheelSpeed(follower);
+        updateFlywheelSpeedBasedOnDistance(follower);
     }
 
     public void updateTurret(Follower follower, Gamepad gamepad1) {
@@ -191,20 +205,74 @@ public class TurretV2 {
         rightBumperPressed = gamepad1.right_bumper;
 
         if (leftBumperPressed && !lastLeftBumper) {
-            targetRPM = IDLE_RPM;
+            flywheelState = FlywheelStateFSM.PresetLow1000;
         }
         if (rightBumperPressed && !lastRightBumper) {
-            presetIndex = (presetIndex + 1) % rpmPresets.length;
-            targetRPM = rpmPresets[presetIndex];
+            flywheelState = FlywheelStateFSM.AutomaticDistancing;
         }
 
         updateTurretRotation(follower);
-        updateFlywheelSpeed(follower);
+        updateFlywheelSpeedBasedOnDistance(follower);
 
         lastLeftBumper = leftBumperPressed;
         lastRightBumper = rightBumperPressed;
     }
     private void updateFlywheelSpeed(Follower follower) {
+        double currentVelocity = flywheelMotor.getVelocity();
+        double currentRPM = (currentVelocity / TICKS_PER_REV_FLYWHEEL) * 60.0;
+
+        long currentTime = System.nanoTime();
+        double dt = (currentTime - flywheelLastTime) / 1e9;
+
+        double error = targetRPM - currentRPM;
+
+        flywheelIntegral += error * dt;
+        flywheelIntegral = Math.max(-10000, Math.min(10000, flywheelIntegral));
+
+        double derivative = (error - flywheelLastError) / dt;
+        double feedforward = flywheelKF * targetRPM;
+        double pidOutput = (flywheelKp * error) + (flywheelKi * flywheelIntegral) + (flywheelKd * derivative) + feedforward;
+
+        pidOutput = Math.max(-1.0, Math.min(1.0, pidOutput));
+        flywheelMotor.setPower(pidOutput);
+
+        flywheelLastError = error;
+        flywheelLastTime = currentTime;
+    }
+
+    private void _calculateDesiredFlywheelRPM (Follower follower) {
+        switch (flywheelState){
+            case OFF:
+                targetRPM = 0;
+                break;
+            case AutomaticDistancing:
+                double dx = follower.getPose().getX() - GoalLocation.getX();
+                double dy = follower.getPose().getY() - GoalLocation.getY();
+
+                // 80.5 is the original distance required to shoot at 3100 RPM, so (3100 / 80.5) is a ratio
+                // FLYWHEEL_DISTANCE_VELOCITY_RATIO = 80.5, but can be finetuned
+
+                targetRPM = (int) Math.sqrt(dx * dx + dy * dy) / FLYWHEEL_DISTANCE_VELOCITY_RATIO * 3100;
+
+                // make sure target rpm doesn't fall below 1500
+                targetRPM = Math.max(targetRPM, 1500);
+                break;
+            case PresetLow1000:
+                targetRPM = 1000;
+                break;
+            case Preset3100:
+                targetRPM = 3100;
+                break;
+            case Preset3600:
+                targetRPM = 3600;
+                break;
+        }
+    }
+
+    /// Automatically calculates the desired targetRPM for the flywheel, instead of manually setting
+    private void updateFlywheelSpeedBasedOnDistance(Follower follower) {
+        _calculateDesiredFlywheelRPM(follower);
+
         double currentVelocity = flywheelMotor.getVelocity();
         double currentRPM = (currentVelocity / TICKS_PER_REV_FLYWHEEL) * 60.0;
 
@@ -292,9 +360,10 @@ public class TurretV2 {
 
                 double y_goal_distance = follower.getPose().getY() - GoalLocation.getY();
                 double x_goal_distance = follower.getPose().getX() - GoalLocation.getX();
-                Pose velocityWiseGoalOffset = calculateDesiredGoalPositionODOMETRYOffset(follower);
+                // Pose velocityWiseGoalOffset = calculateDesiredGoalPositionODOMETRYOffset(follower);
+                // double angle_to_goal = Math.atan2(y_goal_distance + velocityWiseGoalOffset.getY(), x_goal_distance + velocityWiseGoalOffset.getX());
 
-                double angle_to_goal = Math.atan2(y_goal_distance + velocityWiseGoalOffset.getY(), x_goal_distance + velocityWiseGoalOffset.getX());
+                double angle_to_goal = Math.atan2(y_goal_distance, x_goal_distance);
                 double turretDesiredRelativeOffset = normalizeAngle(-angle_to_goal + follower.getHeading() + Math.PI);
                 runOdomPID(turretDesiredRelativeOffset, follower);
             }
