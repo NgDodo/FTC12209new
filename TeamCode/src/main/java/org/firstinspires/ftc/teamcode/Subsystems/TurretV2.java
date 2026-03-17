@@ -14,7 +14,9 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.IMU;
-
+import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
+import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
+import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.Telemetry;
 
 import java.util.List;
@@ -32,46 +34,26 @@ public class TurretV2 {
     private long flywheelLastTime = 0;
 
     // === Turret Odometry PID ===
-    /// if it's oversshooting the turret rotation while detecting limelight, increase llKd or reduce llKp
-    /// if it's overshooting while not detecting limelight, decrease kP
-    // Used when limelight cannot see the target — rougher, longer-range correction
     public static double odomKp = 4.75;
     public static double odomKi = 0.0;
     public static double odomKd = 0.18;
     public static double odomKf = 0.005;
-    public static double odomDeadband = 0.005;       // rotations — skip PID inside this range
-    public static double odomIntegralClamp = 5.0;   // max integral accumulation
+    public static double odomDeadband = 0.005;
+    public static double odomIntegralClamp = 5.0;
     private double odomIntegral = 0;
     private double odomLastError = 0;
     private long odomLastTime = 0;
 
     // === Rotational Velocity Feedforward ===
-    // Drives the turret to counter-rotate at the same rate the robot is spinning,
-    // so fast robot rotations don't cause the turret to lag behind the goal.
-    // Uses follower.getVelocity().getAngularVelocity() directly — no differentiation needed.
-    //
-    // How to tune odomKff_rotation:
-    //   1. Cover the limelight so only odom-PID is active.
-    //   2. Set odomKff_rotation = 0. Spin the robot fast. Observe how far the
-    //      turret lags after the robot stops.
-    //   3. Increase odomKff_rotation in small steps (e.g. 0.005 at a time) and
-    //      repeat until the turret stays roughly on target during the spin.
-    //   4. If the turret now overshoots after the robot stops, back off slightly
-    //      or increase odomKd to dampen it.
-    //
-    // Units: motor power per (rad/s of robot angular velocity)
-    // Negative because when the robot rotates CCW (+), the turret must rotate
-    // CW (-) to hold its absolute heading — i.e. counter-rotation.
-    public static double odomKff_rotation = 0.0;    // start here, tune upward
+    public static double odomKff_rotation = 0.0;
 
     // === Turret Limelight PID ===
-    // Used when limelight sees the target — finer, short-range correction
     public static double llKp = 4;
     public static double llKi = 0.0;
     public static double llKd = 0.25;
     public static double llKf = 0.0;
-    public static double llDeadband = 1.0;          // degrees — skip PID inside this range
-    public static double llIntegralClamp = 5.0;     // max integral accumulation
+    public static double llDeadband = 1.0;
+    public static double llIntegralClamp = 5.0;
     private double llIntegral = 0;
     private double llLastError = 0;
     private long llLastTime = 0;
@@ -88,8 +70,7 @@ public class TurretV2 {
     private static final int APRILTAG_PIPELINE = 1;
 
     // === Turret Configuration ===
-    public static final double TURRET_TICKS_PER_REV = 2596.363; // equals the (gear ratio x motor resolution x gearbox on motor)
-    // here, this equals (204/44) x (28 ticks/rev) x (20)
+    public static final double TURRET_TICKS_PER_REV = 2596.363;
 
     public boolean limelightTracking = false;
 
@@ -103,13 +84,42 @@ public class TurretV2 {
         OBELISK_TRACKING
     }
 
+    // ========================================================================
+    // RPM DISTANCE BRACKETS
+    // ========================================================================
+    // Three distance zones — tune the RPMs and thresholds in FTC Dashboard.
+    // Distance is measured in inches from the robot to the goal.
+    //
+    //   CLOSE:  distance < DIST_THRESHOLD_CLOSE
+    //   MEDIUM: DIST_THRESHOLD_CLOSE <= distance < DIST_THRESHOLD_MEDIUM
+    //   FAR:    distance >= DIST_THRESHOLD_MEDIUM
+    //
+    // To tune:
+    //   1. Drive to each zone and note the distance logged in telemetry.
+    //   2. Adjust RPM until balls score consistently from that zone.
+    //   3. Set the thresholds to match the physical zones on your field.
+    public static double DIST_THRESHOLD_CLOSE  = 48.0;   // inches — closer than this = CLOSE
+    public static double DIST_THRESHOLD_MEDIUM = 100.0;   // inches — closer than this = MEDIUM, else FAR
+
+    public static double RPM_CLOSE  = 2700;
+    public static double RPM_MEDIUM = 3200;
+    public static double RPM_FAR    = 3800;
+
+    // ========================================================================
+    // MEGATAG LIMELIGHT TARGETING
+    // ========================================================================
+    // When MegaTag field-space localization is active, the limelight returns a
+    // full 3D robot pose in field coordinates. We use that pose to compute an
+    // exact angle to the goal — much more accurate than bearing-only tracking,
+    // especially at steep angles or long range.
+    //
+    // Set USE_MEGATAG_POSE = true to enable. Falls back to bearing-only if
+    // MegaTag pose is unavailable in a given frame.
+    public static boolean USE_MEGATAG_POSE = false;
+
     // === Shooting parameters ===
     private static final double IDLE_RPM = 2000;
 
-    // === Shooter presets ===
-    private final int[] rpmPresets = {3100, 3800};
-    private int presetIndex = -1;
-    public double targetRPM = 0;
     private boolean lastRightBumper = false;
     private boolean lastLeftBumper = false;
     private boolean lastDpadLeft = false;
@@ -121,7 +131,7 @@ public class TurretV2 {
     public TurretTrackingMode currentTrackingMode = TurretTrackingMode.GOAL_TRACKING;
     private boolean lastBButton = false;
 
-    public static double ARTIFACT_SHOOT_EXIT_VELOCITY = 80.0; /// in/sec
+    public static double ARTIFACT_SHOOT_EXIT_VELOCITY = 80.0;
     public static double FLYWHEEL_DISTANCE_VELOCITY_RATIO = 70.0;
     public Pose GoalLocation, ObeliskLocation;
 
@@ -142,10 +152,13 @@ public class TurretV2 {
 
     public FlywheelStateFSM flywheelState = FlywheelStateFSM.OFF;
 
-
     public TurretMOTIF currentMotif;
     public String allianceColor;
     public double manualTeleopOffset = 0.0;
+
+    // Cached last-known distance for telemetry
+    private double lastDistanceToGoal = 0.0;
+    private String lastRPMZone = "UNKNOWN";
 
     public TurretV2(HardwareMap hardwareMap, String _allianceColor) {
         switch (_allianceColor) {
@@ -196,7 +209,6 @@ public class TurretV2 {
 
     public void updateTurret(Follower follower) {
         updateTurretRotation(follower);
-        // updateFlywheelSpeed(follower);
         updateFlywheelSpeedBasedOnDistance(follower);
     }
 
@@ -217,59 +229,87 @@ public class TurretV2 {
         lastLeftBumper = leftBumperPressed;
         lastRightBumper = rightBumperPressed;
     }
-    private void updateFlywheelSpeed(Follower follower) {
-        double currentVelocity = flywheelMotor.getVelocity();
-        double currentRPM = (currentVelocity / TICKS_PER_REV_FLYWHEEL) * 60.0;
 
-        long currentTime = System.nanoTime();
-        double dt = (currentTime - flywheelLastTime) / 1e9;
+    // ========================================================================
+    // RPM CALCULATION — distance bracket presets
+    // ========================================================================
 
-        double error = targetRPM - currentRPM;
-
-        flywheelIntegral += error * dt;
-        flywheelIntegral = Math.max(-10000, Math.min(10000, flywheelIntegral));
-
-        double derivative = (error - flywheelLastError) / dt;
-        double feedforward = flywheelKF * targetRPM;
-        double pidOutput = (flywheelKp * error) + (flywheelKi * flywheelIntegral) + (flywheelKd * derivative) + feedforward;
-
-        pidOutput = Math.max(-1.0, Math.min(1.0, pidOutput));
-        flywheelMotor.setPower(pidOutput);
-
-        flywheelLastError = error;
-        flywheelLastTime = currentTime;
+    /**
+     * Returns the correct RPM for the current distance to goal using three zones.
+     * All thresholds and RPMs are tunable in FTC Dashboard.
+     */
+    private double getRPMForDistance(double distanceInches) {
+        if (distanceInches < DIST_THRESHOLD_CLOSE) {
+            lastRPMZone = "CLOSE";
+            return RPM_CLOSE;
+        } else if (distanceInches < DIST_THRESHOLD_MEDIUM) {
+            lastRPMZone = "MEDIUM";
+            return RPM_MEDIUM;
+        } else {
+            lastRPMZone = "FAR";
+            return RPM_FAR;
+        }
     }
 
-    private void _calculateDesiredFlywheelRPM (Follower follower) {
-        switch (flywheelState){
+    private void _calculateDesiredFlywheelRPM(Follower follower) {
+        switch (flywheelState) {
             case OFF:
                 targetRPM = 0;
+                lastRPMZone = "OFF";
                 break;
+
             case AutomaticDistancing:
-                double dx = follower.getPose().getX() - GoalLocation.getX();
-                double dy = follower.getPose().getY() - GoalLocation.getY();
-
-                // 80.5 is the original distance required to shoot at 3100 RPM, so (3100 / 80.5) is a ratio
-                // FLYWHEEL_DISTANCE_VELOCITY_RATIO = 80.5, but can be finetuned
-
-                targetRPM = (int) Math.sqrt(dx * dx + dy * dy) / FLYWHEEL_DISTANCE_VELOCITY_RATIO * 3100;
-
-                // make sure target rpm doesn't fall below 1500
-                targetRPM = Math.max(targetRPM, 1500);
+                // Use MegaTag pose if available and enabled, otherwise fall back to odometry pose
+                double[] goalPos = getMegaTagGoalDistance(follower);
+                lastDistanceToGoal = goalPos[0];
+                targetRPM = getRPMForDistance(lastDistanceToGoal);
                 break;
+
             case PresetLow1000:
                 targetRPM = 1000;
+                lastRPMZone = "MANUAL";
                 break;
+
             case Preset3100:
                 targetRPM = 3100;
+                lastRPMZone = "MANUAL";
                 break;
+
             case Preset3600:
                 targetRPM = 3600;
+                lastRPMZone = "MANUAL";
                 break;
         }
     }
 
-    /// Automatically calculates the desired targetRPM for the flywheel, instead of manually setting
+    /**
+     * Returns [distance, robotX, robotY] using MegaTag field-space pose if
+     * USE_MEGATAG_POSE is true and a valid MegaTag result exists, otherwise
+     * falls back to Pedro odometry pose.
+     *
+     * MegaTag gives us the robot's absolute field position as seen by the
+     * limelight's 3D solver — more accurate than odometry drift over a match.
+     */
+    private double[] getMegaTagGoalDistance(Follower follower) {
+        double robotX = follower.getPose().getX();
+        double robotY = follower.getPose().getY();
+
+        if (USE_MEGATAG_POSE) {
+            LLResult result = limelight.getLatestResult();
+            if (result != null && result.isValid()) {
+                Pose3D botpose = result.getBotpose_MT2(); // MT2 is more accurate
+                if (botpose != null) {
+                    robotX = botpose.getPosition().x * 39.3701;
+                    robotY = botpose.getPosition().y * 39.3701;
+                }
+            }
+        }
+
+        double dx = robotX - GoalLocation.getX();
+        double dy = robotY - GoalLocation.getY();
+        return new double[]{Math.sqrt(dx * dx + dy * dy), robotX, robotY};
+    }
+
     private void updateFlywheelSpeedBasedOnDistance(Follower follower) {
         _calculateDesiredFlywheelRPM(follower);
 
@@ -294,6 +334,10 @@ public class TurretV2 {
         flywheelLastError = error;
         flywheelLastTime = currentTime;
     }
+
+    // ========================================================================
+    // TURRET ROTATION — MegaTag-enhanced limelight + odometry fallback
+    // ========================================================================
 
     private void updateTurretRotation(Follower follower) {
         if (currentTrackingMode.equals(TurretTrackingMode.OBELISK_TRACKING) && currentMotif.equals(TurretMOTIF.UNKNOWN)) {
@@ -329,22 +373,57 @@ public class TurretV2 {
 
         if (currentTrackingMode.equals(TurretTrackingMode.GOAL_TRACKING)) {
             LLResult result = limelight.getLatestResult();
+
             if (result != null && result.isValid()) {
                 List<LLResultTypes.FiducialResult> fiducials = result.getFiducialResults();
                 for (LLResultTypes.FiducialResult fiducial : fiducials) {
                     if ((fiducial.getFiducialId() == 24 && this.allianceColor.equals("RED"))
                             || (fiducial.getFiducialId() == 20 && this.allianceColor.equals("BLUE"))) {
+
                         this.limelightTracking = true;
 
+                        // ── MegaTag path ──────────────────────────────────────────────────────
+                        // If MegaTag is enabled and we have a valid field-space pose, compute
+                        // the exact angle to the goal from that pose rather than using the raw
+                        // bearing. This removes lens-angle error and gives consistent accuracy
+                        // across the whole field.
+                        if (USE_MEGATAG_POSE) {
+                            Pose3D botpose = result.getBotpose_MT2();
+                            if (botpose != null) {
+                                double megaTagX   = botpose.getPosition().x * 39.3701;
+                                double megaTagY   = botpose.getPosition().y * 39.3701;
+                                double megaTagYaw = botpose.getOrientation().getYaw(AngleUnit.DEGREES);
+
+                                double dx = GoalLocation.getX() - megaTagX;
+                                double dy = GoalLocation.getY() - megaTagY;
+
+                                double fieldAngleToGoalDeg = Math.toDegrees(Math.atan2(dy, dx));
+                                double turretRelativeDeg   = fieldAngleToGoalDeg - megaTagYaw;
+
+                                while (turretRelativeDeg >  180.0) turretRelativeDeg -= 360.0;
+                                while (turretRelativeDeg < -180.0) turretRelativeDeg += 360.0;
+
+                                double errorRotations = turretRelativeDeg / 360.0;
+                                double velocityAdj    = calculateDesiredGoalAngleLIMELIGHTOffset(follower);
+
+                                if (Math.abs(turretRelativeDeg) > llDeadband) {
+                                    turretRotationMotor.setPower(runLimelightPID(errorRotations + velocityAdj));
+                                } else {
+                                    resetLimelightPID();
+                                    turretRotationMotor.setPower(0);
+                                }
+                                break;
+                            }
+                            // MegaTag pose unavailable — fall through to bearing-only
+                        }
+
+                        // ── Bearing-only path (original behaviour, fallback) ──────────────────
                         double bearingDegrees = fiducial.getTargetXDegrees();
                         if (Math.abs(bearingDegrees) > llDeadband) {
-                            // Error in rotations — limelight bearing is a relative offset so no
-                            // position subtraction needed, just convert degrees to rotations
                             double error = bearingDegrees / 360.0;
                             double velocityCompensatedAngleAdj = calculateDesiredGoalAngleLIMELIGHTOffset(follower);
                             turretRotationMotor.setPower(runLimelightPID(error + velocityCompensatedAngleAdj));
                         } else {
-                            // Inside deadband — hold position and reset limelight PID state
                             resetLimelightPID();
                             turretRotationMotor.setPower(0);
                         }
@@ -353,16 +432,12 @@ public class TurretV2 {
                 }
             }
 
-            // Limelight lost the target — fall back to odometry, reset LL PID so it
-            // doesn't have stale integral/derivative when it reacquires
+            // Limelight lost target — fall back to odometry
             if (!this.limelightTracking) {
                 resetLimelightPID();
 
                 double y_goal_distance = follower.getPose().getY() - GoalLocation.getY();
                 double x_goal_distance = follower.getPose().getX() - GoalLocation.getX();
-                // Pose velocityWiseGoalOffset = calculateDesiredGoalPositionODOMETRYOffset(follower);
-                // double angle_to_goal = Math.atan2(y_goal_distance + velocityWiseGoalOffset.getY(), x_goal_distance + velocityWiseGoalOffset.getX());
-
                 double angle_to_goal = Math.atan2(y_goal_distance, x_goal_distance);
                 double turretDesiredRelativeOffset = normalizeAngle(-angle_to_goal + follower.getHeading() + Math.PI);
                 runOdomPID(turretDesiredRelativeOffset, follower);
@@ -370,59 +445,49 @@ public class TurretV2 {
         }
     }
 
-    private Pose calculateDesiredGoalPositionODOMETRYOffset(Follower follower){
+    // ========================================================================
+    // VELOCITY LEAD COMPENSATION (unchanged)
+    // ========================================================================
+
+    private Pose calculateDesiredGoalPositionODOMETRYOffset(Follower follower) {
         double dx = GoalLocation.getX() - follower.getPose().getX();
         double dy = GoalLocation.getY() - follower.getPose().getY();
-        double distanceToTarget = Math.sqrt(dx * dx + dy * dy); /// in inches
-
+        double distanceToTarget = Math.sqrt(dx * dx + dy * dy);
         double shooting_time = distanceToTarget / ARTIFACT_SHOOT_EXIT_VELOCITY;
-
         double x_velocity = follower.getVelocity().getXComponent();
         double y_velocity = follower.getVelocity().getYComponent();
-
-
-        return new Pose(x_velocity * shooting_time, y_velocity * shooting_time); // negative to be in reverse direction
+        return new Pose(x_velocity * shooting_time, y_velocity * shooting_time);
     }
 
-    private double calculateDesiredGoalAngleLIMELIGHTOffset(Follower follower){
+    private double calculateDesiredGoalAngleLIMELIGHTOffset(Follower follower) {
         double dx = GoalLocation.getX() - follower.getPose().getX();
         double dy = GoalLocation.getY() - follower.getPose().getY();
-        double distanceToTarget = Math.sqrt(dx * dx + dy * dy); /// in inches
-
+        double distanceToTarget = Math.sqrt(dx * dx + dy * dy);
         double shooting_time = distanceToTarget / ARTIFACT_SHOOT_EXIT_VELOCITY;
-
         double x_velocity = follower.getVelocity().getXComponent();
         double y_velocity = follower.getVelocity().getYComponent();
-
-
-        Pose offsetFromActualGoal = new Pose(x_velocity * shooting_time, y_velocity * shooting_time); // negative to be in reverse direction
-        double angleOffset = Math.atan2(offsetFromActualGoal.getY() - follower.getPose().getY(), offsetFromActualGoal.getX() - follower.getPose().getX());
-        return angleOffset / 360.0; /// returns in rotations
+        Pose offsetFromActualGoal = new Pose(x_velocity * shooting_time, y_velocity * shooting_time);
+        double angleOffset = Math.atan2(
+                offsetFromActualGoal.getY() - follower.getPose().getY(),
+                offsetFromActualGoal.getX() - follower.getPose().getX()
+        );
+        return angleOffset / 360.0;
     }
 
-    /**
-     * Odometry-based PID — converts a desired relative angle offset into motor power.
-     * Error is in rotations.
-     *
-     * The rotational-velocity feedforward term (-odomKff_rotation * angularVelocity)
-     * is added directly to the PID output. When the robot spins CCW (positive rad/s),
-     * the turret must spin CW (negative power) to hold its absolute heading, hence the
-     * negative sign. This keeps the turret on-target during fast robot rotations before
-     * positional error has a chance to build up.
-     */
+    // ========================================================================
+    // PID CONTROLLERS (unchanged)
+    // ========================================================================
+
     private double runOdomPID(double turretDesiredRelativeOffset, Follower follower) {
         double turretDesiredDegrees = Math.toDegrees(turretDesiredRelativeOffset);
         double currentRotations = turretRotationMotor.getCurrentPosition() / TURRET_TICKS_PER_REV - manualTeleopOffset;
         double desiredRotations = turretDesiredDegrees / 360.0;
         double error = desiredRotations - currentRotations;
 
-        // velocity in rad/s directly from Pedro's localizer — no differentiation needed.
         double angularVelocity = follower.getAngularVelocity();
         double rotationFeedforward = -odomKff_rotation * angularVelocity;
 
         if (Math.abs(error) < odomDeadband) {
-            // Still apply feedforward inside the deadband so the turret actively
-            // counter-rotates with the robot even when position error is tiny.
             turretRotationMotor.setPower(Math.max(-1.0, Math.min(1.0, rotationFeedforward)));
             resetOdomPID();
             return error;
@@ -442,21 +507,16 @@ public class TurretV2 {
                 + (odomKi * odomIntegral)
                 + (odomKd * derivative)
                 + feedforward
-                + rotationFeedforward;  // <-- counter-rotation feedforward
+                + rotationFeedforward;
 
         output = Math.max(-1.0, Math.min(1.0, output));
         turretRotationMotor.setPower(output);
 
         odomLastError = error;
         odomLastTime = currentTime;
-
         return error;
     }
 
-    /**
-     * Limelight-based PID — error is the bearing in rotations (degrees/360).
-     * Since bearing is already a relative offset from center, no position math needed.
-     */
     private double runLimelightPID(double error) {
         long currentTime = System.nanoTime();
         double dt = (currentTime - llLastTime) / 1e9;
@@ -474,10 +534,8 @@ public class TurretV2 {
                 + feedforward;
 
         output = Math.max(-1.0, Math.min(1.0, output));
-
         llLastError = error;
         llLastTime = currentTime;
-
         return output;
     }
 
@@ -494,14 +552,21 @@ public class TurretV2 {
     }
 
     private double normalizeAngle(double angle) {
-        while (angle > 0.7*Math.PI) angle -= 2 * Math.PI;
-        while (angle < -1.3*Math.PI) angle += 2 * Math.PI;
+        while (angle >  0.7  * Math.PI) angle -= 2 * Math.PI;
+        while (angle < -1.3 * Math.PI) angle += 2 * Math.PI;
         return angle;
     }
 
-    public void updateManualOffset (double amount_to_change) {
+    // ========================================================================
+    // PUBLIC API (unchanged)
+    // ========================================================================
+
+    public double targetRPM = 0;
+
+    public void updateManualOffset(double amount_to_change) {
         manualTeleopOffset += amount_to_change;
     }
+
     public void postTelemetry(Telemetry telemetry) {
         double currentRPM = (flywheelMotor.getVelocity() / TICKS_PER_REV_FLYWHEEL) * 60.0;
         double rpmError = Math.abs(targetRPM - currentRPM);
@@ -510,10 +575,13 @@ public class TurretV2 {
         telemetry.addLine("=== Shooter ===");
         telemetry.addData("Target RPM", targetRPM);
         telemetry.addData("Actual RPM", String.format("%.0f", currentRPM));
+        telemetry.addData("RPM Zone", lastRPMZone);
+        telemetry.addData("Distance to Goal (in)", String.format("%.1f", lastDistanceToGoal));
         telemetry.addData("Ready", rpmReady ? "YES" : "NO");
         telemetry.addLine("=== Turret ===");
         telemetry.addData("Tracking Mode", currentTrackingMode);
         telemetry.addData("Limelight Active", limelightTracking);
+        telemetry.addData("MegaTag Enabled", USE_MEGATAG_POSE);
         telemetry.addData("Turret Position (ticks)", turretRotationMotor.getCurrentPosition());
         telemetry.addData("Turret Position (rot)", turretRotationMotor.getCurrentPosition() / TURRET_TICKS_PER_REV);
         telemetry.addLine();
@@ -523,7 +591,6 @@ public class TurretV2 {
         double y_goal_distance = follower.getPose().getY() - GoalLocation.getY();
         double x_goal_distance = follower.getPose().getX() - GoalLocation.getX();
         Pose velocityWiseGoalOffset = calculateDesiredGoalPositionODOMETRYOffset(follower);
-
         telemetry.addData("Desired Goal X: ", x_goal_distance + velocityWiseGoalOffset.getX());
         telemetry.addData("Desired Goal Y: ", y_goal_distance + velocityWiseGoalOffset.getY());
         telemetry.addLine();
@@ -531,9 +598,11 @@ public class TurretV2 {
 
     public void setFlywheelRPM(String shootingLocation) {
         if (shootingLocation.equals("FAR")) {
-            targetRPM = rpmPresets[1];
+            targetRPM = RPM_FAR;
+        } else if (shootingLocation.equals("MEDIUM")) {
+            targetRPM = RPM_MEDIUM;
         } else {
-            targetRPM = rpmPresets[0];
+            targetRPM = RPM_CLOSE;
         }
     }
 
