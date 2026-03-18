@@ -511,20 +511,6 @@ public class Sorter {
                 rotateChamberColorsCounterClockwise();
                 currentChamber = prevChamber(currentChamber);
             }
-
-            if (rotationsNeeded == 0) {
-                // No alignment needed, go straight to normal PID target
-                int targetPos = getChamberPosition(currentChamber, false);
-                startSorterMove(targetPos);
-            } else {
-                // Force counterclockwise by setting a raw target BELOW current position
-                // instead of using the normalized shortest-path PID
-                int currentRaw = sorterEncoder.getCurrentPosition();
-                int stepsInTicks = Math.abs(rotationsNeeded) * SLOT;
-                int rawTarget = currentRaw - stepsInTicks; // always counterclockwise
-                sorterTargetPosition = rawTarget; // bypass normalization
-                sorterTimer.reset();
-            }
         }
     }
 
