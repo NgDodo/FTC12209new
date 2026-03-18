@@ -36,8 +36,6 @@ public class FSMControlledCloseBlue_213v2 extends OpMode {
 
     private boolean lastFollowerBusyState = false;
 
-    public static int desiredFlywheelRPM = 3650;
-
     @Override
     public void init() {
         follower = Constants.createFollower(hardwareMap);
@@ -63,7 +61,6 @@ public class FSMControlledCloseBlue_213v2 extends OpMode {
 
         follower.followPath(Path1);
 
-        turret.setFlywheelRPM(desiredFlywheelRPM); // rev up flywheel
         turret.currentTrackingMode = Turret.TurretTrackingMode.OBELISK_TRACKING;
         sorter.chamberColors[0] = "GREEN";
         sorter.chamberColors[1] = "PURPLE";

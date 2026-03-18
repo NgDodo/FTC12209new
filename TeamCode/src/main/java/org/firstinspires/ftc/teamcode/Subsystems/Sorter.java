@@ -18,6 +18,7 @@ public class Sorter {
     public enum sorterStateFSM {
         INTAKE_STATIC,       // in intake mode, not moving
         SWITCHING_CHAMBERS,  // rotating chambers while in intake mode
+        SHOOT_ALIGNING,      // PID-moving to aligned position before shooting
         SHOOTING             // spinning full 360° to shoot all balls
     }
 
@@ -118,10 +119,20 @@ public class Sorter {
             autoIntakeColorCheck();
         }
 
-        if (sorterState.equals(sorterStateFSM.SHOOTING)) {
-            updateShootSpin();
+        if (sorterState == sorterStateFSM.SHOOTING) {
+            updateShootSpin(); // or updateShootSpin(gamepad1) in the gamepad overload
         } else {
             updateSorterPIDMove();
+        }
+
+        // --- ADD THIS BLOCK in both updateSorter methods ---
+        if (sorterState == sorterStateFSM.SHOOT_ALIGNING) {
+            int rawPos = sorterEncoder.getCurrentPosition();
+            int pos = _normalize(rawPos);
+            int error = _calculateShortestError(pos, sorterTargetPosition);
+            if (Math.abs(error) < 80) {
+                sorterState = sorterStateFSM.SHOOTING; // alignment done, now spin
+            }
         }
 
         updateChambersFullLED();
@@ -137,10 +148,20 @@ public class Sorter {
             autoIntakeColorCheck();
         }
 
-        if (sorterState.equals(sorterStateFSM.SHOOTING)) {
-            updateShootSpin(gamepad1);
+        if (sorterState == sorterStateFSM.SHOOTING) {
+            updateShootSpin(gamepad1); // or updateShootSpin(gamepad1) in the gamepad overload
         } else {
             updateSorterPIDMove();
+        }
+
+        // --- ADD THIS BLOCK in both updateSorter methods ---
+        if (sorterState == sorterStateFSM.SHOOT_ALIGNING) {
+            int rawPos = sorterEncoder.getCurrentPosition();
+            int pos = _normalize(rawPos);
+            int error = _calculateShortestError(pos, sorterTargetPosition);
+            if (Math.abs(error) < 80) {
+                sorterState = sorterStateFSM.SHOOTING; // alignment done, now spin
+            }
         }
 
         if (dpadRightPressed && !lastDpadRight) {
@@ -188,8 +209,8 @@ public class Sorter {
      * TeleOp variant: also rumbles the gamepad on completion.
      */
     // === Shoot Spin constants ===
-    public static double SHOOT_POWER_SLOW = -1;   // gentle start to avoid jam
-    public static double SHOOT_POWER_FAST = -1;   // full power once ball is clear
+    public static double SHOOT_POWER_SLOW = -0.8;   // gentle start to avoid jam
+    public static double SHOOT_POWER_FAST = -0.8;   // full power once ball is clear
     public static int SHOOT_RAMP_TICKS = FULL_ROT / 7; // ~120° before kicking to full
     // === Unjam constants ===
     public static double UNJAM_STALL_SECONDS = 0.25;    // how long with no movement before unjamming
@@ -463,40 +484,47 @@ public class Sorter {
 
     public void startShootingSequence() {
         shootSpinStarted = false; // ensure fresh start
-        sorterState = sorterStateFSM.SHOOTING;
+        autoAlignChamberColors();   // rotate chamberColors array + set PID target
+        sorterState = sorterStateFSM.SHOOT_ALIGNING; // wait for PID to reach target first
     }
 
     public void autoAlignChamberColors() {
         int greenIndex = indexOfColor(chamberColors, "GREEN", true);
 
         int rotationCompensateForMotif = 0;
-        if (currentMotif.equals(MOTIF.GPP)) rotationCompensateForMotif = -1;
-        if (currentMotif.equals(MOTIF.PGP)) rotationCompensateForMotif =  1;
-        if (currentMotif.equals(MOTIF.PPG)) rotationCompensateForMotif =  0;
+        if (currentMotif.equals(MOTIF.GPP)) rotationCompensateForMotif = -2;
+        if (currentMotif.equals(MOTIF.PGP)) rotationCompensateForMotif =  0;
+        if (currentMotif.equals(MOTIF.PPG)) rotationCompensateForMotif = -1;
 
         if (greenIndex != -1) {
-            int rotationsNeeded = 0 + rotationCompensateForMotif;
+            int rotationsNeeded;
+            if (greenIndex == 0)      rotationsNeeded = 0  + rotationCompensateForMotif;
+            else if (greenIndex == 1) rotationsNeeded = -1 + rotationCompensateForMotif;
+            else                      rotationsNeeded = -2 + rotationCompensateForMotif;
 
-            if (greenIndex == 0) {
-                rotationsNeeded = 0 + rotationCompensateForMotif;
-            } else if (greenIndex == 1) {
-                rotationsNeeded = -1 + rotationCompensateForMotif;
-            } else if (greenIndex == 2) {
-                rotationsNeeded = -2 + rotationCompensateForMotif;
-            }
+            // Wrap into [-2, 0]
+            while (rotationsNeeded < -2) rotationsNeeded += 3;
+            while (rotationsNeeded > 0)  rotationsNeeded -= 3;
 
+            // Rotate the chamber array to match
             for (int i = 0; i < Math.abs(rotationsNeeded); i++) {
-                if (rotationsNeeded > 0) {
-                    rotateChamberColorsClockwise();
-                    currentChamber = nextChamber(currentChamber);
-                } else if (rotationsNeeded < 0) {
-                    rotateChamberColorsCounterClockwise();
-                    currentChamber = prevChamber(currentChamber);
-                }
+                rotateChamberColorsCounterClockwise();
+                currentChamber = prevChamber(currentChamber);
             }
 
-            int targetPos = getChamberPosition(currentChamber, false);
-            startSorterMove(targetPos);
+            if (rotationsNeeded == 0) {
+                // No alignment needed, go straight to normal PID target
+                int targetPos = getChamberPosition(currentChamber, false);
+                startSorterMove(targetPos);
+            } else {
+                // Force counterclockwise by setting a raw target BELOW current position
+                // instead of using the normalized shortest-path PID
+                int currentRaw = sorterEncoder.getCurrentPosition();
+                int stepsInTicks = Math.abs(rotationsNeeded) * SLOT;
+                int rawTarget = currentRaw - stepsInTicks; // always counterclockwise
+                sorterTargetPosition = rawTarget; // bypass normalization
+                sorterTimer.reset();
+            }
         }
     }
 

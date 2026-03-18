@@ -13,6 +13,7 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 import org.firstinspires.ftc.teamcode.Subsystems.Intake;
 import org.firstinspires.ftc.teamcode.Subsystems.Sorter;
 import org.firstinspires.ftc.teamcode.Subsystems.Turret;
+import org.firstinspires.ftc.teamcode.Subsystems.TurretV2;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 @Configurable
@@ -29,15 +30,13 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
 
     private Intake intake;
     private Sorter sorter;
-    private Turret turret;
+    private TurretV2 turret;
 
     private ElapsedTime telemetryLimiter = new ElapsedTime();
     private ElapsedTime loopTime = new ElapsedTime();
     private ElapsedTime globalAutonTime = new ElapsedTime();
 
     private boolean lastFollowerBusyState = false;
-
-    public static int desiredFlywheelRPM = 3650;
 
     @Override
     public void init() {
@@ -46,7 +45,7 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
 
         intake = new Intake(hardwareMap);
         sorter = new Sorter(hardwareMap);
-        turret = new Turret(hardwareMap, "RED");
+        turret = new TurretV2(hardwareMap, "RED");
 
         autoTimer = new ElapsedTime();
         pathTimer = new ElapsedTime();
@@ -63,8 +62,7 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
 
         follower.followPath(Path1);
 
-        turret.setFlywheelRPM(desiredFlywheelRPM); // rev up flywheel
-        turret.currentTrackingMode = Turret.TurretTrackingMode.OBELISK_TRACKING;
+        turret.currentTrackingMode = TurretV2.TurretTrackingMode.OBELISK_TRACKING;
         sorter.chamberColors[0] = "GREEN";
         sorter.chamberColors[1] = "PURPLE";
         sorter.chamberColors[2] = "PURPLE";
@@ -83,7 +81,7 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
         turret.updateTurret(follower);
 
         /// Update Global Motif for Sorter
-        if (!turret.currentMotif.equals(Turret.TurretMOTIF.UNKNOWN)) {
+        if (!turret.currentMotif.equals(TurretV2.TurretMOTIF.UNKNOWN)) {
             switch (turret.currentMotif) {
                 case PPG:
                     sorter.currentMotif = Sorter.MOTIF.PPG;
@@ -115,6 +113,8 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
             telemetry.addData("Loop Time (Hz)", 1.0 / loopTime.seconds());
             telemetry.addData("Position", follower.getPose());
             telemetry.addData("PATH STATE", pathState);
+            telemetry.addData("Flywheel RPM", turret.getFlywheelRPM());
+            telemetry.addData("Target Flywheel RPM", turret.targetRPM);
             telemetry.update();
             telemetryLimiter.reset();
         }
@@ -185,7 +185,7 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
             case 0: // Move to shooting position
                 if (follower.getPathCompletion() > 0.9
                         && turret.flywheelReachedDesiredRPM()
-                        && (!turret.currentMotif.equals(Turret.TurretMOTIF.UNKNOWN) || pathTimer.seconds() > 2.0)) {
+                        && (!turret.currentMotif.equals(TurretV2.TurretMOTIF.UNKNOWN) || pathTimer.seconds() > 2.0)) {
                     sorter.startShootingSequence(); // start shooting
                     pathState = 101; // goes to shooting sequence
                     pathTimer.reset();
@@ -208,7 +208,7 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
                     pathTimer.reset();
                 }
                 if (follower.getPathCompletion() > 0.35 && follower.getPathCompletion() < 0.7) {
-                    follower.setMaxPower(.3);
+                    follower.setMaxPower(.7);
                 }
                 if (sorter.allChambersFull() || (!followerBusy && pathTimer.seconds() > 1.0)) { // successfully intaked all 3 balls
                     follower.setMaxPower(1.0);
@@ -254,7 +254,7 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
                     pathTimer.reset();
                 }
                 if (follower.getPathCompletion() > 0.025) {
-                    follower.setMaxPower(.25);
+                    follower.setMaxPower(.7);
                 }
                 if (sorter.allChambersFull() || (!followerBusy && pathTimer.seconds() > 1.0)) { // successfully intaked all 3 balls
                     follower.setMaxPower(1.0);
@@ -285,7 +285,7 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
             /// INTAKE + SHOOT ROW 1 ARTIFACTS (3)
             case 400:
                 if (follower.getPathCompletion() > 0.425) {
-                    follower.setMaxPower(.3);
+                    follower.setMaxPower(.7);
                 }
                 if (!followerBusy) {
                     if (lastFollowerBusyState && !follower.isBusy()) { // just finished path
@@ -330,7 +330,7 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
                         new BezierLine(
                                 new Pose(123.100, 123.100),
 
-                                new Pose(100, 100)
+                                new Pose(90, 84)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(36), Math.toRadians(0))
 
@@ -340,7 +340,7 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
                         new BezierCurve(
                                 new Pose(100, 100),
                                 new Pose(74, 54.976),
-                                new Pose(125.000, 56.00)
+                                new Pose(124.000, 56.00)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
 
@@ -370,7 +370,7 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
                         new BezierLine(
                                 new Pose(90.000, 84.000),
 
-                                new Pose(123.000, 84.000)
+                                new Pose(122.000, 84.000)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
 
@@ -390,7 +390,7 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
                         new BezierCurve(
                                 new Pose(90.000, 84.000),
                                 new Pose(68, 34.436),
-                                new Pose(124.500, 33.100)
+                                new Pose(123.500, 33.100)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
 

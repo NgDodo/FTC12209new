@@ -25,7 +25,7 @@ import java.util.List;
 @Configurable
 public class TurretV2 {
     // === Flywheel PID ===
-    public static double flywheelKp = 0.0035;
+    public static double flywheelKp = 0.01;
     public static double flywheelKi = 0.00001;
     public static double flywheelKd = 0.0;
     public static double flywheelKF = 0.00035;
@@ -48,10 +48,10 @@ public class TurretV2 {
     public static double odomKff_rotation = 0.0;
 
     // === Turret Limelight PID ===
-    public static double llKp = 4;
+    public static double llKp = 7.0;
     public static double llKi = 0.0;
-    public static double llKd = 0.25;
-    public static double llKf = 0.0;
+    public static double llKd = 0.0;
+    public static double llKf = 0.01;
     public static double llDeadband = 1.0;
     public static double llIntegralClamp = 5.0;
     private double llIntegral = 0;
@@ -105,6 +105,7 @@ public class TurretV2 {
     public static double RPM_MEDIUM = 3200;
     public static double RPM_FAR    = 3800;
 
+    public static double RPM_FF = 125;
     // ========================================================================
     // MEGATAG LIMELIGHT TARGETING
     // ========================================================================
@@ -127,6 +128,8 @@ public class TurretV2 {
 
     public static final double TICKS_PER_REV_FLYWHEEL = 28.0;
     private static final double RPM_TOLERANCE = 100.0;
+
+    public static double goalOffsetForLimelight = -2.0;
 
     public TurretTrackingMode currentTrackingMode = TurretTrackingMode.GOAL_TRACKING;
     private boolean lastBButton = false;
@@ -208,8 +211,11 @@ public class TurretV2 {
     }
 
     public void updateTurret(Follower follower) {
+        updateMegaTagRelocalization(follower); // add this line
         updateTurretRotation(follower);
         updateFlywheelSpeedBasedOnDistance(follower);
+
+        flywheelState = FlywheelStateFSM.AutomaticDistancing;
     }
 
     public void updateTurret(Follower follower, Gamepad gamepad1) {
@@ -223,6 +229,7 @@ public class TurretV2 {
             flywheelState = FlywheelStateFSM.AutomaticDistancing;
         }
 
+        updateMegaTagRelocalization(follower); // add this line
         updateTurretRotation(follower);
         updateFlywheelSpeedBasedOnDistance(follower);
 
@@ -262,7 +269,7 @@ public class TurretV2 {
                 // Use MegaTag pose if available and enabled, otherwise fall back to odometry pose
                 double[] goalPos = getMegaTagGoalDistance(follower);
                 lastDistanceToGoal = goalPos[0];
-                targetRPM = getRPMForDistance(lastDistanceToGoal);
+                targetRPM = getRPMForDistance(lastDistanceToGoal) + RPM_FF;
                 break;
 
             case PresetLow1000:
@@ -297,7 +304,7 @@ public class TurretV2 {
         if (USE_MEGATAG_POSE) {
             LLResult result = limelight.getLatestResult();
             if (result != null && result.isValid()) {
-                Pose3D botpose = result.getBotpose_MT2(); // MT2 is more accurate
+                Pose3D botpose = result.getBotpose(); // MT2 is more accurate
                 if (botpose != null) {
                     robotX = botpose.getPosition().x * 39.3701;
                     robotY = botpose.getPosition().y * 39.3701;
@@ -334,7 +341,41 @@ public class TurretV2 {
         flywheelLastError = error;
         flywheelLastTime = currentTime;
     }
+    // === MegaTag Relocalization ===
+// Instead of tracking directly from MegaTag pose, use it to correct
+// Pedro's odometry when a tag is visible. The odom PID then runs as normal
+// off the corrected pose — no twitching from frame-to-frame vision noise.
+    public static boolean USE_MEGATAG_RELOCALIZATION = false;
+    public static double MEGATAG_RELOCALIZE_TRUST = 0.15; // 0.0 = full odom, 1.0 = full vision
+// Lower trust = smoother but slower correction. Start at 0.15, raise if odom drifts badly.
+    /**
+     * If a MegaTag2 pose is available, nudges Pedro's current pose toward the
+     * vision-derived pose by MEGATAG_RELOCALIZE_TRUST (a blend factor).
+     * Called once per loop — smooth, noise-resistant, never jerky.
+     */
+    private void updateMegaTagRelocalization(Follower follower) {
+        if (!USE_MEGATAG_RELOCALIZATION) return;
 
+        LLResult result = limelight.getLatestResult();
+        if (result == null || !result.isValid()) return;
+
+        Pose3D botpose = result.getBotpose();
+        if (botpose == null) return;
+
+        double visionX = botpose.getPosition().x * 39.3701;
+        double visionY = botpose.getPosition().y * 39.3701;
+
+        // Blend current odom pose toward vision pose
+        double currentX = follower.getPose().getX();
+        double currentY = follower.getPose().getY();
+        double currentH = follower.getPose().getHeading();
+
+        double correctedX = currentX + MEGATAG_RELOCALIZE_TRUST * (visionX - currentX);
+        double correctedY = currentY + MEGATAG_RELOCALIZE_TRUST * (visionY - currentY);
+
+        // Heading comes from IMU directly — don't blend vision heading, it's noisy
+        follower.setPose(new Pose(correctedX, correctedY, currentH));
+    }
     // ========================================================================
     // TURRET ROTATION — MegaTag-enhanced limelight + odometry fallback
     // ========================================================================
@@ -388,7 +429,7 @@ public class TurretV2 {
                         // bearing. This removes lens-angle error and gives consistent accuracy
                         // across the whole field.
                         if (USE_MEGATAG_POSE) {
-                            Pose3D botpose = result.getBotpose_MT2();
+                            Pose3D botpose = result.getBotpose();
                             if (botpose != null) {
                                 double megaTagX   = botpose.getPosition().x * 39.3701;
                                 double megaTagY   = botpose.getPosition().y * 39.3701;
@@ -418,9 +459,15 @@ public class TurretV2 {
                         }
 
                         // ── Bearing-only path (original behaviour, fallback) ──────────────────
-                        double bearingDegrees = fiducial.getTargetXDegrees();
+                        double llGoalOffset;
+                        if (allianceColor.equals("RED")) {
+                            llGoalOffset = -goalOffsetForLimelight;
+                        }
+                        else {llGoalOffset = goalOffsetForLimelight;}
+
+                        double bearingDegrees = fiducial.getTargetXDegrees() + llGoalOffset;
                         if (Math.abs(bearingDegrees) > llDeadband) {
-                            double error = bearingDegrees / 360.0;
+                            double error = (bearingDegrees + llGoalOffset) / 360.0;
                             double velocityCompensatedAngleAdj = calculateDesiredGoalAngleLIMELIGHTOffset(follower);
                             turretRotationMotor.setPower(runLimelightPID(error + velocityCompensatedAngleAdj));
                         } else {
@@ -552,8 +599,8 @@ public class TurretV2 {
     }
 
     private double normalizeAngle(double angle) {
-        while (angle >  0.7  * Math.PI) angle -= 2 * Math.PI;
-        while (angle < -1.3 * Math.PI) angle += 2 * Math.PI;
+        while (angle >  1.3  * Math.PI) angle -= 2 * Math.PI;
+        while (angle < -0.7 * Math.PI) angle += 2 * Math.PI;
         return angle;
     }
 
@@ -582,6 +629,7 @@ public class TurretV2 {
         telemetry.addData("Tracking Mode", currentTrackingMode);
         telemetry.addData("Limelight Active", limelightTracking);
         telemetry.addData("MegaTag Enabled", USE_MEGATAG_POSE);
+        telemetry.addData("MegaTag Relocalization", USE_MEGATAG_RELOCALIZATION ? "ON" : "OFF");
         telemetry.addData("Turret Position (ticks)", turretRotationMotor.getCurrentPosition());
         telemetry.addData("Turret Position (rot)", turretRotationMotor.getCurrentPosition() / TURRET_TICKS_PER_REV);
         telemetry.addLine();
