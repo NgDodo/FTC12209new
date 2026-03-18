@@ -15,7 +15,6 @@ import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.IMU;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
-import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.Telemetry;
 
@@ -25,7 +24,7 @@ import java.util.List;
 @Configurable
 public class TurretV2 {
     // === Flywheel PID ===
-    public static double flywheelKp = 0.01;
+    public static double flywheelKp = 0.005;
     public static double flywheelKi = 0.00001;
     public static double flywheelKd = 0.0;
     public static double flywheelKF = 0.00035;
@@ -98,12 +97,12 @@ public class TurretV2 {
     //   1. Drive to each zone and note the distance logged in telemetry.
     //   2. Adjust RPM until balls score consistently from that zone.
     //   3. Set the thresholds to match the physical zones on your field.
-    public static double DIST_THRESHOLD_CLOSE  = 48.0;   // inches — closer than this = CLOSE
-    public static double DIST_THRESHOLD_MEDIUM = 100.0;   // inches — closer than this = MEDIUM, else FAR
+    public static double DIST_THRESHOLD_CLOSE  = 75.0;   // inches — closer than this = CLOSE
+    public static double DIST_THRESHOLD_MEDIUM = 120.0;   // inches — closer than this = MEDIUM, else FAR
 
-    public static double RPM_CLOSE  = 2700;
-    public static double RPM_MEDIUM = 3200;
-    public static double RPM_FAR    = 3800;
+    public static double RPM_CLOSE  = 3350;
+    public static double RPM_MEDIUM = 3500;
+    public static double RPM_FAR    = 4000;
 
     public static double RPM_FF = 125;
     // ========================================================================
