@@ -195,7 +195,7 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
             /// INTAKE + SHOOT PRELOADED ARTIFACTS (1)
 
             case 101: // while shooting set 1, wait until finished shooting
-                if (!sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING)) {
+                if (!sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING) && !sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOT_ALIGNING)) {
                     follower.followPath(Path2); // go intake over row 2
                     intake.intakeState = Intake.intakeStateFSM.INTAKE_IN; // turn on intake
                     pathState = 200; // has finished shooting, line up to artifact row 2
@@ -240,7 +240,7 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
                 }
                 break;
             case 203:
-                if (!sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING)) {
+                if (!sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING) && !sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOT_ALIGNING)) {
                     // go intake from row 1
                     intake.intakeState = Intake.intakeStateFSM.INTAKE_IN; // turn on intake
                     follower.followPath(Path5);
@@ -273,7 +273,7 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
                 }
                 break;
             case 302:
-                if (!sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING)) {
+                if (!sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING) && !sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOT_ALIGNING)) {
                     // go intake from row 3
                     intake.intakeState = Intake.intakeStateFSM.INTAKE_IN; // turn on intake
                     /// TODO: change to set max power after certain time period
@@ -301,7 +301,7 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
                 }
                 break;
             case 401:
-                if (follower.getPathCompletion() > 0.9 && !sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING)) {
+                if (follower.getPathCompletion() > 0.9 && (!sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING) && !sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOT_ALIGNING))) {
                     sorter.startShootingSequence(); // start shooting
                 }
                 if (!followerBusy) { // once we reach shooting spot
@@ -311,7 +311,7 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
                 }
                 break;
             case 402:
-                if (!followerBusy && !sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING)) {
+                if (!followerBusy && (!sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING) && !sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOT_ALIGNING))) {
                     pathState = -1; // has finished shooting, END AUTON
                     pathTimer.reset();
                 }

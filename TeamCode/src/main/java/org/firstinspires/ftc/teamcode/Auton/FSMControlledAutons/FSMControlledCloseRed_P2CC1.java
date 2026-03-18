@@ -65,6 +65,7 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
         sorter.chamberColors[0] = "GREEN";
         sorter.chamberColors[1] = "PURPLE";
         sorter.chamberColors[2] = "PURPLE";
+        sorter.setShooterSpeed(1.0);
 
         telemetryLimiter.reset();
         loopTime.reset();
@@ -194,7 +195,7 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
             /// INTAKE + SHOOT PRELOADED ARTIFACTS (1)
 
             case 101: // while shooting set 1, wait until finished shooting
-                if (!sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING)) {
+                if (!sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING) && !sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOT_ALIGNING)) {
                     follower.followPath(Path2); // go intake over row 2
                     intake.intakeState = Intake.intakeStateFSM.INTAKE_IN; // turn on intake
                     pathState = 200; // has finished shooting, line up to artifact row 2
@@ -232,7 +233,7 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
                 }
                 break;
             case 202:
-                if (!sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING)) {
+                if (!sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING) && !sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOT_ALIGNING)) {
                     // go intake from classifier
                     intake.intakeState = Intake.intakeStateFSM.INTAKE_IN; // turn on intake
                     follower.followPath(Path4);
@@ -265,7 +266,7 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
                 }
                 break;
             case 302:
-                if (!sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING)) {
+                if (!sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING) && !sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOT_ALIGNING)) {
                     // go intake from row 3
                     intake.intakeState = Intake.intakeStateFSM.INTAKE_IN; // turn on intake
                     /// TODO: change to set max power after certain time period
@@ -299,7 +300,7 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
                 }
                 break;
             case 305:
-                if (!sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING)) {
+                if (!sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING) && !sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOT_ALIGNING)) {
                     // go intake from row 3
                     intake.intakeState = Intake.intakeStateFSM.INTAKE_IN; // turn on intake
                     /// TODO: change to set max power after certain time period
@@ -310,7 +311,7 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
                 break;
             /// INTAKE + SHOOT ROW 1 ARTIFACTS (3)
             case 400:
-                if (follower.getPathCompletion() > 0.425) {
+                if (follower.getPathCompletion() > 0.1) {
                     follower.setMaxPower(.7);
                 }
                 if (!followerBusy) {
@@ -327,7 +328,7 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
                 }
                 break;
             case 401:
-                if (follower.getPathCompletion() > 0.9 && !sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING)) {
+                if (follower.getPathCompletion() > 0.9 && (!sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING) && !sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOT_ALIGNING))) {
                     sorter.startShootingSequence(); // start shooting
                 }
                 if (!followerBusy) { // once we reach shooting spot
@@ -337,7 +338,7 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
                 }
                 break;
             case 402:
-                if (!followerBusy && !sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING)) {
+                if (!followerBusy && (!sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING) && !sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOT_ALIGNING))) {
                     pathState = -1; // has finished shooting, END AUTON
                     pathTimer.reset();
                 }
@@ -365,7 +366,7 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
         Path2 = follower.pathBuilder().addPath(
                         new BezierCurve(
                                 new Pose(85.000, 75.000),
-                                new Pose(104.000, 60.000),
+                                new Pose(102.000, 55.000),
                                 new Pose(124.000, 56.000)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
@@ -386,9 +387,9 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
                         new BezierLine(
                                 new Pose(85.000, 75.000),
 
-                                new Pose(124.000, 66.000)
+                                new Pose(124.500, 63.500)
                         )
-                ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(20))
+                ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(25))
 
                 .build();
 
@@ -406,9 +407,9 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
                         new BezierLine(
                                 new Pose(85.000, 75.000),
 
-                                new Pose(124.000, 66.000)
+                                new Pose(124.500, 63.500)
                         )
-                ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(20))
+                ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(25))
 
                 .build();
 
@@ -426,7 +427,7 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
                         new BezierCurve(
                                 new Pose(85.000, 75.000),
                                 new Pose(94.200, 89.000),
-                                new Pose(122.000, 84.000)
+                                new Pose(121.500, 84.000)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(-10))
 

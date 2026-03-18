@@ -628,6 +628,11 @@ public class Sorter {
     // =========================================================================
     // TELEMETRY
     // =========================================================================
+
+    public void setShooterSpeed(double speed) {
+        SHOOT_POWER_FAST = -speed;
+        SHOOT_POWER_SLOW = -speed;
+    }
     public void postTelemetry(Telemetry telemetry) {
         int normPos = _normalize(sorterEncoder.getCurrentPosition());
 

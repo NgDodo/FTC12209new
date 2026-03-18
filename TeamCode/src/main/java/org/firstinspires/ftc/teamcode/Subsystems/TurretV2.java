@@ -100,9 +100,9 @@ public class TurretV2 {
     public static double DIST_THRESHOLD_CLOSE  = 75.0;   // inches — closer than this = CLOSE
     public static double DIST_THRESHOLD_MEDIUM = 120.0;   // inches — closer than this = MEDIUM, else FAR
 
-    public static double RPM_CLOSE  = 3350;
-    public static double RPM_MEDIUM = 3500;
-    public static double RPM_FAR    = 4000;
+    public static double RPM_CLOSE  = 2950;
+    public static double RPM_MEDIUM = 3200;
+    public static double RPM_FAR    = 3600;
 
     public static double RPM_FF = 125;
     // ========================================================================
