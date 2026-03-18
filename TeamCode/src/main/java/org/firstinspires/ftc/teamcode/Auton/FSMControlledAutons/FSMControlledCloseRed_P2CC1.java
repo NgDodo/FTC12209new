@@ -25,7 +25,7 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
     private ElapsedTime autoTimer;
     private ElapsedTime pathTimer;
 
-    public static PathChain Path1, Path2, Path3, Path4, Path5, Path6, Path7, Path8, Path9;
+    public static PathChain Path1, Path2, Path3, Path4, PathStepBackFromClassifier, Path5, Path6, Path7, Path8, Path9;
 
     private Intake intake;
     private Sorter sorter;
@@ -237,19 +237,28 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
                     // go intake from classifier
                     intake.intakeState = Intake.intakeStateFSM.INTAKE_IN; // turn on intake
                     follower.followPath(Path4);
-                    pathState = 300; // go to intaking row 1
+                    pathState = 203; // go to intaking row 1
                     pathTimer.reset();
                 }
+                break;
+            case 203:
+                if (follower.getPathCompletion() > 0.5) {
+                    follower.setMaxPower(.5);
+                }
+                if (lastFollowerBusyState && !followerBusy) {
+                    pathTimer.reset();
+                }
+                if (!followerBusy) {
+                    follower.followPath(PathStepBackFromClassifier);
+                }
+                pathState = 300;
                 break;
             case 300: // intake from classifier, exit when (path finished + pathtimer exceeds max allowed time)
                 // OR (if all chamber colors are filled with a color)
                 if (lastFollowerBusyState && !followerBusy) { // just finished path, reset timer to wait for artifacts
                     pathTimer.reset();
                 }
-                if (follower.getPathCompletion() > 0.5) {
-                    follower.setMaxPower(.5);
-                }
-                if (sorter.allChambersFull() || (!followerBusy && pathTimer.seconds() > 1.0)) { // successfully intaked all 3 balls
+                if (sorter.allChambersFull() || (!followerBusy && pathTimer.seconds() > 2.0)) { // successfully intaked all 3 balls
                     follower.setMaxPower(1.0);
                     follower.followPath(Path5); // go to shooting spot
                     intake.intakeState = Intake.intakeStateFSM.INTAKE_STOP;
@@ -271,19 +280,28 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
                     intake.intakeState = Intake.intakeStateFSM.INTAKE_IN; // turn on intake
                     /// TODO: change to set max power after certain time period
                     follower.followPath(Path6);
-                    pathState = 303; // go to intaking row 3
+                    pathState = 302_1; // go to intaking row 3
                     pathTimer.reset();
                 }
                 break;
-            case 303: // intake from classifier, exit when (path finished + pathtimer exceeds max allowed time)
-                // OR (if all chamber colors are filled with a color)
+            case 302_1:
                 if (lastFollowerBusyState && !followerBusy) { // just finished path, reset timer to wait for artifacts
                     pathTimer.reset();
                 }
                 if (follower.getPathCompletion() > 0.5) {
                     follower.setMaxPower(.5);
                 }
-                if (sorter.allChambersFull() || (!followerBusy && pathTimer.seconds() > 1.0)) { // successfully intaked all 3 balls
+                if (!followerBusy) {
+                    follower.followPath(PathStepBackFromClassifier);
+                }
+                pathState = 303;
+                break;
+            case 303: // intake from classifier, exit when (path finished + pathtimer exceeds max allowed time)
+                // OR (if all chamber colors are filled with a color)
+                if (lastFollowerBusyState && !followerBusy) { // just finished path, reset timer to wait for artifacts
+                    pathTimer.reset();
+                }
+                if (sorter.allChambersFull() || (!followerBusy && pathTimer.seconds() > 2.0)) { // successfully intaked all 3 balls
                     follower.setMaxPower(1.0);
                     follower.followPath(Path7); // go to shooting spot
                     intake.intakeState = Intake.intakeStateFSM.INTAKE_STOP;
@@ -366,7 +384,7 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
         Path2 = follower.pathBuilder().addPath(
                         new BezierCurve(
                                 new Pose(85.000, 75.000),
-                                new Pose(102.000, 55.000),
+                                new Pose(88.000, 50.000),
                                 new Pose(124.000, 56.000)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
@@ -384,30 +402,39 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
                 .build();
 
         Path4 = follower.pathBuilder().addPath(
-                        new BezierLine(
+                        new BezierCurve(
                                 new Pose(85.000, 75.000),
-
-                                new Pose(124.500, 63.500)
+                                new Pose(94.000, 56.000),
+                                new Pose(125.00, 62.500)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(25))
 
                 .build();
 
+        PathStepBackFromClassifier = follower.pathBuilder().addPath(
+                    new BezierLine(
+                            new Pose(125.000, 62.500),
+                            new Pose(125.000, 61.000)
+                        )
+                ).setLinearHeadingInterpolation(Math.toRadians(25), Math.toRadians(25))
+
+                .build();
+
         Path5 = follower.pathBuilder().addPath(
                         new BezierLine(
-                                new Pose(124.000, 66.000),
+                                new Pose(125.000, 61.000),
 
                                 new Pose(85.000, 75.000)
                         )
-                ).setLinearHeadingInterpolation(Math.toRadians(20), Math.toRadians(0))
+                ).setLinearHeadingInterpolation(Math.toRadians(25), Math.toRadians(0))
 
                 .build();
 
         Path6 = follower.pathBuilder().addPath(
-                        new BezierLine(
+                        new BezierCurve(
                                 new Pose(85.000, 75.000),
-
-                                new Pose(124.500, 63.500)
+                                new Pose(104.500, 73.500),
+                                new Pose(125.000, 62.500)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(25))
 
@@ -415,11 +442,11 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
 
         Path7 = follower.pathBuilder().addPath(
                         new BezierLine(
-                                new Pose(124.000, 66.000),
+                                new Pose(125.000, 61.000),
 
                                 new Pose(85.000, 75.000)
                         )
-                ).setLinearHeadingInterpolation(Math.toRadians(20), Math.toRadians(0))
+                ).setLinearHeadingInterpolation(Math.toRadians(25), Math.toRadians(0))
 
                 .build();
 
@@ -427,7 +454,7 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
                         new BezierCurve(
                                 new Pose(85.000, 75.000),
                                 new Pose(94.200, 89.000),
-                                new Pose(121.500, 84.000)
+                                new Pose(122.000, 84.000)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(-10))
 
