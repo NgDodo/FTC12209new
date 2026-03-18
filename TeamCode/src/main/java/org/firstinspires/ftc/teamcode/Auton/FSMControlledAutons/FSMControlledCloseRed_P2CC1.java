@@ -242,8 +242,8 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
                 }
                 break;
             case 203:
-                if (follower.getPathCompletion() > 0.5) {
-                    follower.setMaxPower(.5);
+                if (follower.getPathCompletion() > 0.3) {
+                    follower.setMaxPower(.3);
                 }
                 if (lastFollowerBusyState && !followerBusy) {
                     pathTimer.reset();
@@ -280,16 +280,16 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
                     intake.intakeState = Intake.intakeStateFSM.INTAKE_IN; // turn on intake
                     /// TODO: change to set max power after certain time period
                     follower.followPath(Path6);
-                    pathState = 302_1; // go to intaking row 3
+                    pathState = 30201; // go to intaking row 3
                     pathTimer.reset();
                 }
                 break;
-            case 302_1:
+            case 30201:
                 if (lastFollowerBusyState && !followerBusy) { // just finished path, reset timer to wait for artifacts
                     pathTimer.reset();
                 }
-                if (follower.getPathCompletion() > 0.5) {
-                    follower.setMaxPower(.5);
+                if (follower.getPathCompletion() > 0.3) {
+                    follower.setMaxPower(.3);
                 }
                 if (!followerBusy) {
                     follower.followPath(PathStepBackFromClassifier);
@@ -405,7 +405,7 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
                         new BezierCurve(
                                 new Pose(85.000, 75.000),
                                 new Pose(94.000, 56.000),
-                                new Pose(125.00, 62.500)
+                                new Pose(124.500, 61.500)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(25))
 
@@ -413,8 +413,8 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
 
         PathStepBackFromClassifier = follower.pathBuilder().addPath(
                     new BezierLine(
-                            new Pose(125.000, 62.500),
-                            new Pose(125.000, 61.000)
+                            new Pose(124.500, 61.500),
+                            new Pose(124.000, 60.000)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(25), Math.toRadians(25))
 
@@ -422,7 +422,7 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
 
         Path5 = follower.pathBuilder().addPath(
                         new BezierLine(
-                                new Pose(125.000, 61.000),
+                                new Pose(124.000, 60.000),
 
                                 new Pose(85.000, 75.000)
                         )
@@ -433,8 +433,8 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
         Path6 = follower.pathBuilder().addPath(
                         new BezierCurve(
                                 new Pose(85.000, 75.000),
-                                new Pose(104.500, 73.500),
-                                new Pose(125.000, 62.500)
+                                new Pose(94.000, 56.000),
+                                new Pose(124.500, 61.500)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(25))
 
