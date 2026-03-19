@@ -242,8 +242,8 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
                 }
                 break;
             case 203:
-                if (follower.getPathCompletion() > 0.3) {
-                    follower.setMaxPower(.3);
+                if (follower.getPathCompletion() > 0.01) {
+                    follower.setMaxPower(.0);
                 }
                 if (lastFollowerBusyState && !followerBusy) {
                     pathTimer.reset();
@@ -288,8 +288,8 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
                 if (lastFollowerBusyState && !followerBusy) { // just finished path, reset timer to wait for artifacts
                     pathTimer.reset();
                 }
-                if (follower.getPathCompletion() > 0.3) {
-                    follower.setMaxPower(.3);
+                if (follower.getPathCompletion() > 0.01) {
+                    follower.setMaxPower(.01);
                 }
                 if (!followerBusy) {
                     follower.followPath(PathStepBackFromClassifier);
