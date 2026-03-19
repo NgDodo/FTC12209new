@@ -250,8 +250,8 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
                 }
                 if (!followerBusy) {
                     follower.followPath(PathStepBackFromClassifier);
+                    pathState = 300;
                 }
-                pathState = 300;
                 break;
             case 300: // intake from classifier, exit when (path finished + pathtimer exceeds max allowed time)
                 // OR (if all chamber colors are filled with a color)
@@ -293,8 +293,8 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
                 }
                 if (!followerBusy) {
                     follower.followPath(PathStepBackFromClassifier);
+                    pathState = 303;
                 }
-                pathState = 303;
                 break;
             case 303: // intake from classifier, exit when (path finished + pathtimer exceeds max allowed time)
                 // OR (if all chamber colors are filled with a color)
