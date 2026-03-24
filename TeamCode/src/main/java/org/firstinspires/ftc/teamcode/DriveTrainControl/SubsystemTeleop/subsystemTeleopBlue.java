@@ -37,7 +37,7 @@ public class subsystemTeleopBlue extends OpMode {
 
     @Override
     public void init() {
-        startingPose = new Pose(142.500 - 87.000,  115.000, Math.toRadians(169));
+        startingPose = new Pose(142.500 - 87.000,  120, Math.toRadians(169));
         follower = Constants.createFollower(hardwareMap);
         follower.setStartingPose(startingPose == null ? new Pose() : startingPose);
         follower.update();
@@ -91,7 +91,7 @@ public class subsystemTeleopBlue extends OpMode {
         boolean dpadLeftPressed = gamepad2.dpad_left;
 
         if (bPressed && !lastBButton) {
-            follower.setPose(new Pose(123.1, 123.1, Math.toRadians(36)));
+            follower.setPose(new Pose(18.4, 123.1, Math.toRadians(144)));
         }
         /// Verbose Telemetry
         /*

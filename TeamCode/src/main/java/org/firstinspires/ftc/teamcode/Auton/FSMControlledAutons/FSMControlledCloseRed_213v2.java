@@ -183,7 +183,7 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
         boolean followerBusy = follower.isBusy();
         switch (pathState) {
             case 0: // Move to shooting position
-                if (follower.getPathCompletion() > 0.9
+                if (follower.getPathCompletion() > 0.9999
                         && turret.flywheelReachedDesiredRPM()
                         && (!turret.currentMotif.equals(TurretV2.TurretMOTIF.UNKNOWN) || pathTimer.seconds() > 2.0)) {
                     sorter.startShootingSequence(); // start shooting
@@ -207,10 +207,10 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
                 if (lastFollowerBusyState && !followerBusy) { // just finished path, reset timer to wait for artifacts
                     pathTimer.reset();
                 }
-                if (follower.getPathCompletion() > 0.35 && follower.getPathCompletion() < 0.7) {
-                    follower.setMaxPower(.7);
+                if (follower.getPathCompletion() > 0.40 && follower.getPathCompletion() < 0.9) {
+                    follower.setMaxPower(.3);
                 }
-                if (sorter.allChambersFull() || (!followerBusy && pathTimer.seconds() > 1.0)) { // successfully intaked all 3 balls
+                if (sorter.allChambersFull() || (!followerBusy && pathTimer.seconds() > 0.5)) { // successfully intaked all 3 balls
                     follower.setMaxPower(1.0);
                     follower.followPath(Path3); // go to shoot classifier
                     intake.intakeState = Intake.intakeStateFSM.INTAKE_STOP;
@@ -254,9 +254,9 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
                     pathTimer.reset();
                 }
                 if (follower.getPathCompletion() > 0.025) {
-                    follower.setMaxPower(.7);
+                    follower.setMaxPower(.30);
                 }
-                if (sorter.allChambersFull() || (!followerBusy && pathTimer.seconds() > 1.0)) { // successfully intaked all 3 balls
+                if (sorter.allChambersFull() || (!followerBusy && pathTimer.seconds() > 0.5)) { // successfully intaked all 3 balls
                     follower.setMaxPower(1.0);
                     follower.followPath(Path6); // go to shooting spot
                     intake.intakeState = Intake.intakeStateFSM.INTAKE_STOP;
@@ -285,13 +285,13 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
             /// INTAKE + SHOOT ROW 1 ARTIFACTS (3)
             case 400:
                 if (follower.getPathCompletion() > 0.425) {
-                    follower.setMaxPower(.7);
+                    follower.setMaxPower(.30);
                 }
                 if (!followerBusy) {
                     if (lastFollowerBusyState && !follower.isBusy()) { // just finished path
                         pathTimer.reset();
                     }
-                    if (sorter.allChambersFull() || (!followerBusy && pathTimer.seconds() > 1.0)) { // delay of 3 seconds, if balls are not intaken by then
+                    if (sorter.allChambersFull() || (!followerBusy && pathTimer.seconds() > 0.5)) { // delay of 3 seconds, if balls are not intaken by then
                         follower.setMaxPower(1.0);
                         follower.followPath(Path8); // give up, go to shooting spot
                         intake.intakeState = Intake.intakeStateFSM.INTAKE_STOP;
@@ -301,7 +301,7 @@ public class FSMControlledCloseRed_213v2 extends OpMode {
                 }
                 break;
             case 401:
-                if (follower.getPathCompletion() > 0.9 && (!sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING) && !sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOT_ALIGNING))) {
+                if (follower.getPathCompletion() > .99999 && (!sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOTING) && !sorter.sorterState.equals(Sorter.sorterStateFSM.SHOOT_ALIGNING))) {
                     sorter.startShootingSequence(); // start shooting
                 }
                 if (!followerBusy) { // once we reach shooting spot

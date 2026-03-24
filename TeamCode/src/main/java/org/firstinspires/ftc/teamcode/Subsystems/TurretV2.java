@@ -97,7 +97,7 @@ public class TurretV2 {
     //   1. Drive to each zone and note the distance logged in telemetry.
     //   2. Adjust RPM until balls score consistently from that zone.
     //   3. Set the thresholds to match the physical zones on your field.
-    public static double DIST_THRESHOLD_CLOSE  = 75.0;   // inches — closer than this = CLOSE
+    public static double DIST_THRESHOLD_CLOSE  = 70.0;   // inches — closer than this = CLOSE
     public static double DIST_THRESHOLD_MEDIUM = 120.0;   // inches — closer than this = MEDIUM, else FAR
 
     public static double RPM_CLOSE  = 2950;
@@ -128,7 +128,7 @@ public class TurretV2 {
     public static final double TICKS_PER_REV_FLYWHEEL = 28.0;
     private static final double RPM_TOLERANCE = 100.0;
 
-    public static double goalOffsetForLimelight = -2.0;
+    public double goalOffsetForLimelight = -2;
 
     public TurretTrackingMode currentTrackingMode = TurretTrackingMode.GOAL_TRACKING;
     private boolean lastBButton = false;
@@ -166,12 +166,15 @@ public class TurretV2 {
         switch (_allianceColor) {
             case "RED":
                 GoalLocation = FIELD_CONSTANTS.RED_GOAL_POST;
+                goalOffsetForLimelight = -2;   // ← added
                 break;
             case "BLUE":
                 GoalLocation = FIELD_CONSTANTS.BLUE_GOAL_POST;
+                goalOffsetForLimelight = 1.5;   // ← added
                 break;
             default:
                 GoalLocation = FIELD_CONSTANTS.BLUE_GOAL_POST;
+                goalOffsetForLimelight = 1.5;   // ← added
                 break;
         }
         ObeliskLocation = FIELD_CONSTANTS.OBELISK_LOCATION;

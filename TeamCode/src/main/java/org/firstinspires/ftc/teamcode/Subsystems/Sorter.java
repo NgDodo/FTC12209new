@@ -61,7 +61,9 @@ public class Sorter {
     // === Timed color detection ===
     private long colorStartTime = 0;
     private boolean colorActive = false;
-    private static final long DETECT_TIME_MS = 10;
+    // How long (ms) to wait after detecting a ball before advancing the chamber.
+    // Increase if balls aren't fully seated before the spindexer rotates.
+    public static long BALL_SETTLE_MS = 125;
 
     // === Sorter constants ===
     private static final int FULL_ROT      = 8192;
@@ -103,7 +105,10 @@ public class Sorter {
     // When true, the PID uses _calculateCCWOnlyError() so it never shortcuts
     // CW through the transfer wedge during sorting or shoot-alignment moves.
     private boolean sortingCCWOnly = false;
-
+    public void setShooterSpeed(double speed) {
+        SHOOT_POWER_FAST = -speed;
+        SHOOT_POWER_SLOW = -speed;
+    }
     // =========================================================================
     // CONSTRUCTOR
     // =========================================================================
@@ -426,15 +431,19 @@ public class Sorter {
             colorStartTime = System.currentTimeMillis();
         }
 
-        if (System.currentTimeMillis() - colorStartTime >= DETECT_TIME_MS) {
+        if (System.currentTimeMillis() - colorStartTime >= BALL_SETTLE_MS) {
             if (chamberColors[0].equals("NONE")) {
                 chamberColors[0] = detected;
 
                 if (allChambersFull()) {
-                    // All 3 balls loaded — sort immediately for the current motif.
-                    // Driver just presses shoot, no extra wait needed.
-                    autoAlignChamberColors();
-                    sorterState = sorterStateFSM.SORTING;
+                    // All 3 balls loaded. Only sort if there is exactly one green
+                    // ball — all-purple (or all-green) loads don't need realignment.
+                    if (needsSorting()) {
+                        autoAlignChamberColors();
+                        sorterState = sorterStateFSM.SORTING;
+                    } else {
+                        sorterState = sorterStateFSM.INTAKE_STATIC;
+                    }
                 } else {
                     // More balls still needed — advance to next intake slot.
                     currentChamber = prevChamber(currentChamber);
@@ -453,6 +462,17 @@ public class Sorter {
         return !chamberColors[0].equals("NONE")
                 && !chamberColors[1].equals("NONE")
                 && !chamberColors[2].equals("NONE");
+    }
+
+    // Returns true only when exactly one green ball is loaded.
+    // All-purple loads (or edge-case all-green) fire from wherever
+    // the spindexer sits — no CCW pre-sort needed.
+    private boolean needsSorting() {
+        int greenCount = 0;
+        for (String c : chamberColors) {
+            if ("GREEN".equals(c)) greenCount++;
+        }
+        return greenCount == 1;
     }
 
     private String detectIntakeColor() {
@@ -527,9 +547,11 @@ public class Sorter {
     // =========================================================================
     public void startShootingSequence() {
         shootSpinStarted = false;
-        // If already sorted on intake, 0 steps needed and returns immediately.
-        // If motif changed after intake, re-sorts correctly here.
-        autoAlignChamberColors();
+        // Only sort if there is exactly one green ball. All-purple or
+        // all-green loads shoot straight from the current position.
+        if (needsSorting()) {
+            autoAlignChamberColors();
+        }
         sorterState = sorterStateFSM.SHOOT_ALIGNING;
     }
 
@@ -628,11 +650,6 @@ public class Sorter {
     // =========================================================================
     // TELEMETRY
     // =========================================================================
-
-    public void setShooterSpeed(double speed) {
-        SHOOT_POWER_FAST = -speed;
-        SHOOT_POWER_SLOW = -speed;
-    }
     public void postTelemetry(Telemetry telemetry) {
         int normPos = _normalize(sorterEncoder.getCurrentPosition());
 

@@ -242,8 +242,8 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
                 }
                 break;
             case 203:
-                if (follower.getPathCompletion() > 0.01) {
-                    follower.setMaxPower(.0);
+                if (follower.getPathCompletion() > 0.5) {
+                    follower.setMaxPower(.5);
                 }
                 if (lastFollowerBusyState && !followerBusy) {
                     pathTimer.reset();
@@ -288,8 +288,8 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
                 if (lastFollowerBusyState && !followerBusy) { // just finished path, reset timer to wait for artifacts
                     pathTimer.reset();
                 }
-                if (follower.getPathCompletion() > 0.01) {
-                    follower.setMaxPower(.01);
+                if (follower.getPathCompletion() > 0.5) {
+                    follower.setMaxPower(.5);
                 }
                 if (!followerBusy) {
                     follower.followPath(PathStepBackFromClassifier);
@@ -375,7 +375,7 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
                         new BezierLine(
                                 new Pose(123.100, 123.100),
 
-                                new Pose(85.000, 75.000)
+                                new Pose(87.000, 75.000)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(36), Math.toRadians(0))
 
@@ -383,9 +383,9 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
 
         Path2 = follower.pathBuilder().addPath(
                         new BezierCurve(
-                                new Pose(85.000, 75.000),
+                                new Pose(87.000, 75.000),
                                 new Pose(88.000, 50.000),
-                                new Pose(124.000, 56.000)
+                                new Pose(127.0, 56.000)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
 
@@ -393,9 +393,9 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
 
         Path3 = follower.pathBuilder().addPath(
                         new BezierLine(
-                                new Pose(124.000, 56.000),
+                                new Pose(127.0, 56.000),
 
-                                new Pose(85.000, 75.000)
+                                new Pose(87.000, 75.000)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
 
@@ -403,9 +403,9 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
 
         Path4 = follower.pathBuilder().addPath(
                         new BezierCurve(
-                                new Pose(85.000, 75.000),
+                                new Pose(87.000, 75.000),
                                 new Pose(94.000, 56.000),
-                                new Pose(124.500, 61.500)
+                                new Pose(125.00, 60)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(25))
 
@@ -413,28 +413,28 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
 
         PathStepBackFromClassifier = follower.pathBuilder().addPath(
                     new BezierLine(
-                            new Pose(124.500, 61.500),
-                            new Pose(124.000, 60.000)
+                            new Pose(125.00, 60),
+                            new Pose(129, 59.5)
                         )
-                ).setLinearHeadingInterpolation(Math.toRadians(25), Math.toRadians(25))
+                ).setLinearHeadingInterpolation(Math.toRadians(25), Math.toRadians(35))
 
                 .build();
 
         Path5 = follower.pathBuilder().addPath(
                         new BezierLine(
-                                new Pose(124.000, 60.000),
+                                new Pose(129, 59.5),
 
-                                new Pose(85.000, 75.000)
+                                new Pose(87.000, 75.000)
                         )
-                ).setLinearHeadingInterpolation(Math.toRadians(25), Math.toRadians(0))
+                ).setLinearHeadingInterpolation(Math.toRadians(30), Math.toRadians(0))
 
                 .build();
 
         Path6 = follower.pathBuilder().addPath(
                         new BezierCurve(
-                                new Pose(85.000, 75.000),
+                                new Pose(87.000, 75.000),
                                 new Pose(94.000, 56.000),
-                                new Pose(124.500, 61.500)
+                                new Pose(125.00, 60.00)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(25))
 
@@ -442,29 +442,29 @@ public class FSMControlledCloseRed_P2CC1 extends OpMode {
 
         Path7 = follower.pathBuilder().addPath(
                         new BezierLine(
-                                new Pose(125.000, 61.000),
+                                new Pose(129, 59.5),
 
-                                new Pose(85.000, 75.000)
+                                new Pose(87.000, 75.000)
                         )
-                ).setLinearHeadingInterpolation(Math.toRadians(25), Math.toRadians(0))
+                ).setLinearHeadingInterpolation(Math.toRadians(30), Math.toRadians(0))
 
                 .build();
 
         Path8 = follower.pathBuilder().addPath(
                         new BezierCurve(
-                                new Pose(85.000, 75.000),
+                                new Pose(87.000, 75.000),
                                 new Pose(94.200, 89.000),
-                                new Pose(122.000, 84.000)
+                                new Pose(124.000, 87.000)
                         )
-                ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(-10))
+                ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(0))
 
                 .build();
 
         Path9 = follower.pathBuilder().addPath(
                         new BezierLine(
-                                new Pose(122.000, 84.000),
+                                new Pose(124.000, 87.000),
 
-                                new Pose(87.000, 115.000)
+                                new Pose(87.000, 110.000)
                         )
                 ).setLinearHeadingInterpolation(Math.toRadians(0), Math.toRadians(15))
 
