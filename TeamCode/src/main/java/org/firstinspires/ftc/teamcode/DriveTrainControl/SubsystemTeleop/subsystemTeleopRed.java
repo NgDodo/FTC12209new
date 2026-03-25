@@ -117,7 +117,7 @@ public class subsystemTeleopRed extends OpMode {
         if (runTelemetry) {
             intake.postTelemetry(telemetry);
             sorter.postTelemetry(telemetry);
-            turret.postTelemetry(telemetry);
+            turret.postTelemetry(telemetry, follower);
 
             // === Manual Motor Power Read
             telemetry.addData("Intake Power: ", intake.intakeMotor.getPower());

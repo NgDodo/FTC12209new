@@ -355,10 +355,10 @@ public class TurretV2 {
                                 double errorTicks    = degreesToTicks(turretRelativeDeg);
                                 double velocityAdj   = calculateDesiredGoalAngleLIMELIGHTOffset(follower);
                                 double velAdjTicks   = degreesToTicks(velocityAdj * 360.0);
-                                turretServo.setPower(runLimelightPID(errorTicks + velAdjTicks));
+                                // turretServo.setPower(runLimelightPID(errorTicks + velAdjTicks));
                             } else {
                                 resetLimelightPID();
-                                turretServo.setPower(0);
+                                // turretServo.setPower(0);
                             }
                             break;
                         }
@@ -374,10 +374,10 @@ public class TurretV2 {
                         double errorTicks  = degreesToTicks(bearingDegrees + llGoalOffset);
                         double velocityAdj = calculateDesiredGoalAngleLIMELIGHTOffset(follower);
                         double velAdjTicks = degreesToTicks(velocityAdj * 360.0);
-                        turretServo.setPower(runLimelightPID(errorTicks + velAdjTicks));
+                        // turretServo.setPower(runLimelightPID(errorTicks + velAdjTicks));
                     } else {
                         resetLimelightPID();
-                        turretServo.setPower(0);
+                        // turretServo.setPower(0);
                     }
                     break;
                 }
@@ -407,7 +407,7 @@ public class TurretV2 {
         int error      = targetTicks - currentPos;
 
         if (Math.abs(error) < servoDeadband) {
-            turretServo.setPower(0);
+            // turretServo.setPower(0);
             resetServoPID();
             return;
         }
@@ -428,7 +428,7 @@ public class TurretV2 {
                 + feedforward;
 
         output = Math.max(-1.0, Math.min(1.0, output));
-        turretServo.setPower(output);
+        // turretServo.setPower(output);
 
         servoLastError = error;
         servoLastTime  = currentTime;
@@ -680,25 +680,44 @@ public class TurretV2 {
     // ========================================================================
     // TELEMETRY
     // ========================================================================
-    public void postTelemetry(Telemetry telemetry) {
+    public void postTelemetry(Telemetry telemetry, Follower follower) {
         double currentRPM = getFlywheelRPM();
         double rpmError   = Math.abs(targetRPM - currentRPM);
         boolean rpmReady  = (targetRPM > 0) && (rpmError <= RPM_TOLERANCE);
 
-        telemetry.addLine("=== Shooter ===");
-        telemetry.addData("Target RPM",             targetRPM);
-        telemetry.addData("Actual RPM",             String.format("%.0f", currentRPM));
-        telemetry.addData("RPM Zone",               lastRPMZone);
-        telemetry.addData("Distance to Goal (in)",  String.format("%.1f", lastDistanceToGoal));
-        telemetry.addData("Ready",                  rpmReady ? "YES" : "NO");
-        telemetry.addLine("=== Turret ===");
-        telemetry.addData("Tracking Mode",          currentTrackingMode);
-        telemetry.addData("Limelight Active",       limelightTracking);
-        telemetry.addData("MegaTag Enabled",        USE_MEGATAG_POSE);
-        telemetry.addData("MegaTag Relocalization", USE_MEGATAG_RELOCALIZATION ? "ON" : "OFF");
+        double y_dist     = follower.getPose().getY() - GoalLocation.getY();
+        double x_dist     = follower.getPose().getX() - GoalLocation.getX();
+
+        double angle      = Math.atan2(y_dist, x_dist);
+        double normalized = normalizeAngle(-angle + follower.getHeading() + Math.PI);
+
+        int rawTicks   = turretEncoderPort.getCurrentPosition();
+        int currentPos = ENCODER_REVERSED ? -rawTicks : rawTicks;
+        int error      = normalizedAngleToTicks(normalized) - currentPos;
+
         telemetry.addData("Encoder Ticks (raw)",    turretEncoderPort.getCurrentPosition());
+        telemetry.addData("Ticks Left to Goal", error);
         telemetry.addData("Turret Angle (deg)",     String.format("%.1f", getTurretAngleDegrees()));
         telemetry.addLine();
+
+        /*
+        if (setting.equals("TELEOP")) {
+            telemetry.addLine("=== Shooter ===");
+            telemetry.addData("Target RPM",             targetRPM);
+            telemetry.addData("Actual RPM",             String.format("%.0f", currentRPM));
+            telemetry.addData("RPM Zone",               lastRPMZone);
+            telemetry.addData("Distance to Goal (in)",  String.format("%.1f", lastDistanceToGoal));
+            telemetry.addData("Ready",                  rpmReady ? "YES" : "NO");
+            telemetry.addLine("=== Turret ===");
+            telemetry.addData("Tracking Mode",          currentTrackingMode);
+            telemetry.addData("Limelight Active",       limelightTracking);
+            telemetry.addData("MegaTag Enabled",        USE_MEGATAG_POSE);
+            telemetry.addData("MegaTag Relocalization", USE_MEGATAG_RELOCALIZATION ? "ON" : "OFF");
+            telemetry.addData("Encoder Ticks (raw)",    turretEncoderPort.getCurrentPosition());
+            telemetry.addData("Turret Angle (deg)",     String.format("%.1f", getTurretAngleDegrees()));
+            telemetry.addLine();
+        }
+        */
     }
 
     public void postTelemetryOnlyGoalPose(Telemetry telemetry, Follower follower) {

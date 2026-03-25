@@ -141,7 +141,7 @@ public class tuneAndLogTurretFlywheel extends OpMode {
         if (runTelemetry) {
             intake.postTelemetry(telemetry);
             sorter.postTelemetry(telemetry);
-            turret.postTelemetry(telemetry);
+            turret.postTelemetry(telemetry, follower);
 
             telemetry.addData("Intake Power: ", intake.intakeMotor.getPower());
             telemetry.addData("Intake Velocity: ", intake.intakeMotor.getVelocity());
