@@ -138,7 +138,7 @@ public class subsystemTeleopBlue extends OpMode {
         if (runTelemetry) {
             intake.postTelemetry(telemetry);
             sorter.postTelemetry(telemetry);
-            turret.postTelemetry(telemetry, follower);
+            turret.postTelemetry(telemetry);
 
             // === Manual Motor Power Read
             telemetry.addData("Intake Power: ", intake.intakeMotor.getPower());
@@ -152,7 +152,7 @@ public class subsystemTeleopBlue extends OpMode {
             telemetry.addLine("RB: RPM | LB: 1500 | DpadDown: Off");
         }
         if (telemetryLimiter.seconds() > 0.5) {
-            turret.postTelemetry(telemetry, follower);
+            turret.postTelemetry(telemetry);
 
             // === Update Loop Time Tracking ===
             telemetry.addData("Loop Time (Hz)", 1.0 / loopTime.seconds());

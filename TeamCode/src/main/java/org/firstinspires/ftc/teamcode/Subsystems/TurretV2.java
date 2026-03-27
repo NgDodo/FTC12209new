@@ -53,10 +53,10 @@ public class TurretV2 {
     //   servoDeadband — error in ticks where we stop the servo.
     //                   REV Throughbore = 8192 ticks/rev.
     //                   10 ticks ≈ 0.44°. Widen to ~30 if the servo hunts.
-    public static double servoKp           = 0.003;
+    public static double servoKp           = 0.00025;
     public static double servoKi           = 0.0;
-    public static double servoKd           = 0.0002;
-    public static double servoKf           = 0.03;
+    public static double servoKd           = 0.000015;
+    public static double servoKf           = 0;
     public static double servoDeadband     = 10.0;      // ticks
     public static double servoIntegralClamp = 500.0;
 
@@ -70,15 +70,15 @@ public class TurretV2 {
     // REV Throughbore Encoder = 8192 counts per full revolution.
     // Flip ENCODER_REVERSED to true if the turret reads backwards on your robot.
     public static final double ENCODER_TICKS_PER_REV = 37981.091;
-    public static       boolean ENCODER_REVERSED      = false;
+    public static       boolean ENCODER_REVERSED      = true;
 
     // ========================================================================
     // TURRET LIMELIGHT PID  (bearing-only and MegaTag correction path)
     // ========================================================================
-    public static double llKp           = 7.0;
+    public static double llKp           = 0.00015;
     public static double llKi           = 0.0;
-    public static double llKd           = 0.0;
-    public static double llKf           = 0.01;
+    public static double llKd           = 0.0000125;
+    public static double llKf           = 0;
     public static double llDeadband     = 1.0;          // degrees
     public static double llIntegralClamp = 5.0;
 
@@ -122,8 +122,8 @@ public class TurretV2 {
     public static double DIST_THRESHOLD_MEDIUM = 120.0;  // inches
     public static double RPM_CLOSE  = 2950;
     public static double RPM_MEDIUM = 3200;
-    public static double RPM_FAR    = 3600;
-    public static double RPM_FF     = 125;
+    public static double RPM_FAR    = 3800;
+    public static double RPM_FF     = 0;
 
     // ========================================================================
     // MEGATAG
@@ -215,6 +215,7 @@ public class TurretV2 {
 
         // --- Turret servo ---
         turretServo = hardwareMap.get(CRServo.class, "s1");
+        turretServo.setDirection(DcMotorSimple.Direction.REVERSE);
         turretServo.setPower(0);
 
         // --- Turret encoder (bL port, phantom — read only, exactly like bR for sorter) ---
@@ -355,10 +356,10 @@ public class TurretV2 {
                                 double errorTicks    = degreesToTicks(turretRelativeDeg);
                                 double velocityAdj   = calculateDesiredGoalAngleLIMELIGHTOffset(follower);
                                 double velAdjTicks   = degreesToTicks(velocityAdj * 360.0);
-                                // turretServo.setPower(runLimelightPID(errorTicks + velAdjTicks));
+                                turretServo.setPower(runLimelightPID(errorTicks + velAdjTicks));
                             } else {
                                 resetLimelightPID();
-                                // turretServo.setPower(0);
+                                turretServo.setPower(0);
                             }
                             break;
                         }
@@ -374,10 +375,10 @@ public class TurretV2 {
                         double errorTicks  = degreesToTicks(bearingDegrees + llGoalOffset);
                         double velocityAdj = calculateDesiredGoalAngleLIMELIGHTOffset(follower);
                         double velAdjTicks = degreesToTicks(velocityAdj * 360.0);
-                        // turretServo.setPower(runLimelightPID(errorTicks + velAdjTicks));
+                        turretServo.setPower(runLimelightPID(errorTicks + velAdjTicks));
                     } else {
                         resetLimelightPID();
-                        // turretServo.setPower(0);
+                        turretServo.setPower(0);
                     }
                     break;
                 }
@@ -407,7 +408,7 @@ public class TurretV2 {
         int error      = targetTicks - currentPos;
 
         if (Math.abs(error) < servoDeadband) {
-            // turretServo.setPower(0);
+            turretServo.setPower(0);
             resetServoPID();
             return;
         }
@@ -428,7 +429,7 @@ public class TurretV2 {
                 + feedforward;
 
         output = Math.max(-1.0, Math.min(1.0, output));
-        // turretServo.setPower(output);
+        turretServo.setPower(output);
 
         servoLastError = error;
         servoLastTime  = currentTime;
@@ -680,44 +681,25 @@ public class TurretV2 {
     // ========================================================================
     // TELEMETRY
     // ========================================================================
-    public void postTelemetry(Telemetry telemetry, Follower follower) {
+    public void postTelemetry(Telemetry telemetry) {
         double currentRPM = getFlywheelRPM();
         double rpmError   = Math.abs(targetRPM - currentRPM);
         boolean rpmReady  = (targetRPM > 0) && (rpmError <= RPM_TOLERANCE);
 
-        double y_dist     = follower.getPose().getY() - GoalLocation.getY();
-        double x_dist     = follower.getPose().getX() - GoalLocation.getX();
-
-        double angle      = Math.atan2(y_dist, x_dist);
-        double normalized = normalizeAngle(-angle + follower.getHeading() + Math.PI);
-
-        int rawTicks   = turretEncoderPort.getCurrentPosition();
-        int currentPos = ENCODER_REVERSED ? -rawTicks : rawTicks;
-        int error      = normalizedAngleToTicks(normalized) - currentPos;
-
+        telemetry.addLine("=== Shooter ===");
+        telemetry.addData("Target RPM",             targetRPM);
+        telemetry.addData("Actual RPM",             String.format("%.0f", currentRPM));
+        telemetry.addData("RPM Zone",               lastRPMZone);
+        telemetry.addData("Distance to Goal (in)",  String.format("%.1f", lastDistanceToGoal));
+        telemetry.addData("Ready",                  rpmReady ? "YES" : "NO");
+        telemetry.addLine("=== Turret ===");
+        telemetry.addData("Tracking Mode",          currentTrackingMode);
+        telemetry.addData("Limelight Active",       limelightTracking);
+        telemetry.addData("MegaTag Enabled",        USE_MEGATAG_POSE);
+        telemetry.addData("MegaTag Relocalization", USE_MEGATAG_RELOCALIZATION ? "ON" : "OFF");
         telemetry.addData("Encoder Ticks (raw)",    turretEncoderPort.getCurrentPosition());
-        telemetry.addData("Ticks Left to Goal", error);
         telemetry.addData("Turret Angle (deg)",     String.format("%.1f", getTurretAngleDegrees()));
         telemetry.addLine();
-
-        /*
-        if (setting.equals("TELEOP")) {
-            telemetry.addLine("=== Shooter ===");
-            telemetry.addData("Target RPM",             targetRPM);
-            telemetry.addData("Actual RPM",             String.format("%.0f", currentRPM));
-            telemetry.addData("RPM Zone",               lastRPMZone);
-            telemetry.addData("Distance to Goal (in)",  String.format("%.1f", lastDistanceToGoal));
-            telemetry.addData("Ready",                  rpmReady ? "YES" : "NO");
-            telemetry.addLine("=== Turret ===");
-            telemetry.addData("Tracking Mode",          currentTrackingMode);
-            telemetry.addData("Limelight Active",       limelightTracking);
-            telemetry.addData("MegaTag Enabled",        USE_MEGATAG_POSE);
-            telemetry.addData("MegaTag Relocalization", USE_MEGATAG_RELOCALIZATION ? "ON" : "OFF");
-            telemetry.addData("Encoder Ticks (raw)",    turretEncoderPort.getCurrentPosition());
-            telemetry.addData("Turret Angle (deg)",     String.format("%.1f", getTurretAngleDegrees()));
-            telemetry.addLine();
-        }
-        */
     }
 
     public void postTelemetryOnlyGoalPose(Telemetry telemetry, Follower follower) {
